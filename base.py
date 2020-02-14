@@ -6,6 +6,7 @@ https://dbader.org/blog/python-dunder-methods
 https://stackoverflow.com/questions/34273544/how-to-check-if-a-key-value-pair-is-present-in-a-dictionary
 https://kbroman.org/github_tutorial/pages/first_time.html
 """
+import string
 
 """
 TODO:
@@ -66,8 +67,7 @@ class Fluid_Handler(object):
 class Recipe(object):
     recipes_dict = {}
 
-    def __init__(self, time_in_seconds: float,
-                 output: tuple, inputs: tuple):
+    def __init__(self, time_in_seconds: float, output: tuple, inputs: tuple):
         """
         output and inputs expects a tuple of format (item:Item, quantity:int)
         """
@@ -79,20 +79,33 @@ class Recipe(object):
             Recipe.recipes_dict[self.item] = self  # classes should add themselves to dict with no duplicates
 
     def __repr__(self):
-        return "Recipe({},{},{})".format(self.time, self.output, self.inputs)
+        return "{}({},{},{})".format(type(self).__name__, self.time, self.output, self.inputs)
 
     @property
     def item(self):
         return self.output[0]
 
     @property
-    def num_outputs(self):
+    def output_quantity(self):
         return self.output[1]
 
     @property
-    def num_inputs(self):
-        if len(self.inputs) == 2 and not isinstance(self.inputs[0], tuple): return 1
-        else: return len(self.inputs)
+    def num_inputs(self):  # can be replaced with len? does it make sense to do so?
+        if len(self.inputs) == 2 and not isinstance(self.inputs[0], tuple):
+            return 1
+        else:
+            return len(self.inputs)
+
+    @staticmethod
+    def get_from_string(str):
+        return Recipe.recipes_dict[Item.items_dict[str]]
+
+    @staticmethod
+    def get_recipe(item):
+        if isinstance(item, str):
+            return Recipe.get_from_string(item)
+        else:
+            return Recipe.recipes_dict[item]
 
 
 class Fluid_Recipe(Recipe, Fluid_Handler):
@@ -143,16 +156,16 @@ class Furnace(Assembly):
 
 class Item(object):
     items_dict = {}
+    is_raw = False
 
     def __init__(self, name: str, machine_type_crafted_in: Machine):
         self.name = name
         self.crafted_in = machine_type_crafted_in
-        self.is_raw = False
 
         if self.name not in Item.items_dict.keys():
             Item.items_dict[self.name] = self
 
-        if isinstance(self.crafted_in, Drill): self.is_raw = True
+        # if isinstance(self.crafted_in, Drill): self.is_raw = True
 
     def __repr__(self):
         return "{}('{}', {})".format(type(self).__name__, self.name, self.crafted_in)
@@ -163,7 +176,7 @@ class Raw_Resource(Item):
     Any item that doesn't have an assembler Recipe should be here
     Examples would be copper ore, oil, water etc.
     """
-    pass
+    is_raw = True
 
 
 def pickle_write(filename: str, objects: list):
@@ -189,6 +202,8 @@ def init_test_data(file_overwrite=False):
     stone_furnace = Furnace("stone_furnace", 1, 0)
 
     copper_ore = Raw_Resource("copper_ore", Drill)
+    r_copper_ore = Recipe(1, (copper_ore, 1), (copper_ore, 1))
+
     copper_plate = Item("copper_plate", Furnace)
     r_copper_plate = Recipe(3.2, (copper_plate, 1), (copper_ore, 1))
 
@@ -196,6 +211,8 @@ def init_test_data(file_overwrite=False):
     r_copper_cable = Recipe(0.5, (copper_cable, 2), (copper_plate, 1))
 
     iron_ore = Raw_Resource("iron_ore", Drill)
+    r_iron_ore = Recipe(1, (iron_ore, 1), (iron_ore, 1))
+
     iron_plate = Item("iron_plate", Furnace)
     r_iron_plate = Recipe(3.2, (iron_plate, 1), (iron_ore, 1))
 
@@ -214,13 +231,52 @@ def read_or_write_data(should_init=False):
 
 read_or_write_data()
 
-for item in Item.items_dict.values():
-    print(item)
 
-for machine in Machine.machines_dict.values():
-    print(machine)
+def add_to_dict(total_dict, item : Item, quantity: int):
+    if item not in total_dict.keys():
+        total_dict[item] = quantity
+    else:
+        cur_quantity = total_dict[item]
+        total_dict[item] = cur_quantity + quantity
+
+
+def recipe_crawler(recipe: Recipe or str, total_dict=None):
+    """
+    Currently displays full tree, but quantities are wrong.
+    Need to take quantity needed for parent / quantity produced by child and multiply output by that amount
+    """
+    if total_dict is None:
+        total_dict = {}
+
+    print(recipe.inputs)
+    if recipe.num_inputs == 1:  # only has a single item,quantity tuple
+        print(recipe.inputs[1])
+        add_to_dict(total_dict, *recipe.inputs)
+        if not recipe.inputs[0].is_raw:  # if len 1 and not raw. basically 1 to 1 crafting like in furnace
+            recipe_crawler(Recipe.get_recipe(recipe.inputs[0]), total_dict)
+    else:  # otherwise it will have multiple item,quantity tuples and i can loop through
+        for item, quantity in recipe.inputs:
+            add_to_dict(total_dict, item, quantity)
+            recipe_crawler(Recipe.get_recipe(item), total_dict)
+    return total_dict
+
+
+recipe = Recipe.get_recipe("electronic_circuit")
+
+total_dict = {}
+for i in range(1):
+    total_dict.update(recipe_crawler(recipe, total_dict))
+
+print("total_dict = ", total_dict)
+
+
+# for item in Item.items_dict.values():
+#     print(item)
 #
-# for recipe in Recipe.recipes_dict.items():
+# for machine in Machine.machines_dict.values():
+#     print(machine)
+#
+# for recipe in Recipe.recipes_dict.values():
 #    print(recipe)
 
 
@@ -236,7 +292,6 @@ for machine in Machine.machines_dict.values():
 #    for event in p.event.get():
 #        if event.type == p.QUIT:
 #            crashed = True
-
 
 # print(event)  # Can be used to get event triggers
 
