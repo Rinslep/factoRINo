@@ -43,8 +43,7 @@ TODO:
 # from functools import total_ordering # must use, v useful
 import pickle
 
-other_filenames = "machines", "items"
-filenames = ["recipes"]
+filenames = ["recipes", "machines", "items"]
 
 
 class Machine(object):
@@ -99,7 +98,7 @@ class Furnace(Assembly):
 
 
 class Recipe(object):
-    recipes_dict = {}
+    recipes_list = []
     multi_crafting_list = []
 
     def __init__(self, time_in_seconds: float, output: tuple, inputs: tuple, name=None):
@@ -120,16 +119,8 @@ class Recipe(object):
         else:
             for item, quantity in self.output:
                 item.add_possible_recipe(self)
-
-
-        # if self.item in Recipe.recipes_dict.keys():
-        #     if not self.inputs == Recipe.recipes_dict[self.item]:  # if not same recipe
-        #         self.multi_crafting_list.append(self.item)  # add to list of items with multiple recipes
-        #     else:
-        #         self.item.add_possible_recipe(self)
-        # else:
-        #     Recipe.recipes_dict[self.item] = self  # classes should add themselves to recipes_dict with no duplicates
-        #     self.item.add_possible_recipe(self)
+        if self not in Recipe.recipes_list:
+            Recipe.recipes_list.append(self)
 
     def __repr__(self):
         return "{}({},{},{})".format(type(self).__name__, self.time, self.output, self.inputs)
@@ -206,7 +197,6 @@ class Item(object):
     is_raw = False
     is_fluid = False
 
-
     def __init__(self, name: str, machine_type_crafted_in=Assembly):
         self.name = name
         self.crafted_in = machine_type_crafted_in
@@ -225,7 +215,7 @@ class Item(object):
 
     def add_possible_recipe(self, recipe):
         self.recipes.append(recipe)
-        print(f"{self}: {recipe.name}")
+        # print(f"{self}: {recipe.name}")
 
     @property
     def has_multi(self):
@@ -266,14 +256,14 @@ def pickle_write(filename: str, objects: list):
 
 def pickle_read(filename: str):
     with open("p_" + filename, "rb") as f:
+        print("Read file: {}".format(filename))
         pickle.load(f)
-        # print("Read file: {}".format(filename))
 
 
 def update_files():
     pickle_write("items", list(Item.items_dict.values()))
     pickle_write("machines", list(Machine.machines_dict.values()))
-    pickle_write("recipes", list(Recipe.recipes_dict.values()))
+    pickle_write("recipes", list(Recipe.recipes_list))
 
 
 def init_test_data(file_overwrite=False):
@@ -283,28 +273,6 @@ def init_test_data(file_overwrite=False):
 
     coal = Raw_Resource("coal", Drill)
     r_coal = Recipe(1, (coal, 1), (coal, 1))
-
-    water = Fluid_Raw_Resource("water", Pump)
-    f_r_water = Fluid_Recipe(1, (water, 1200), (water, 1200))
-
-    steam = Fluid_Item("steam", Fluid_Assembly)
-    f_r_steam = Fluid_Recipe(1, (steam, 60), (water, 60))
-
-    crude_oil = Fluid_Raw_Resource("crude_oil", Pump)
-    f_r_crude_oil = Fluid_Recipe(1, (crude_oil, 100), (crude_oil, 100))
-
-    heavy_oil = Fluid_Item("heavy_oil", Fluid_Assembly)
-    light_oil = Fluid_Item("light_oil", Fluid_Assembly)
-    petroleum_gas = Fluid_Item("petroleum_gas", Fluid_Assembly)
-
-    basic_oil = Fluid_Recipe(5, (petroleum_gas, 45), (crude_oil, 100), "basic_oil_processing")
-    advanced_oil = Fluid_Recipe(5, ((heavy_oil, 25), (light_oil, 45), (petroleum_gas, 55)),
-                                ((crude_oil, 100), (water, 50)), "advanced_oil_processing")
-    coal_liquefaction = Fluid_Recipe(5, ((heavy_oil, 90), (light_oil, 20), (petroleum_gas, 10)),
-                                     ((coal, 10), (heavy_oil, 25), (steam, 50)), "coal_liquefaction")
-
-    heavy_cracking = Fluid_Recipe(2, (light_oil, 30), ((heavy_oil, 40), (water, 30)))
-    light_cracking = Fluid_Recipe(2, (petroleum_gas, 20), ((light_oil, 30), (water, 30)))
 
     copper_ore = Raw_Resource("copper_ore", Drill)
     r_copper_ore = Recipe(1, (copper_ore, 1), (copper_ore, 1))
@@ -320,6 +288,66 @@ def init_test_data(file_overwrite=False):
 
     iron_plate = Item("iron_plate", Furnace)
     r_iron_plate = Recipe(3.2, (iron_plate, 1), (iron_ore, 1))
+
+    pipe = Item("pipe")
+    r_pipe = Recipe(0.5, (pipe, 1), (iron_plate, 1))
+
+    steel_plate = Item("steel_plate", Furnace)
+    r_steel_plate = Recipe(16, (steel_plate, 1), (iron_plate, 5))
+
+    stone = Raw_Resource("stone", Drill)
+    r_stone = Recipe(1, (stone, 1), (stone, 1))
+
+    stone_brick = Item("stone_brick", Furnace)
+    r_stone_brick = Recipe(3.2, (stone_brick, 1), (stone, 2))
+
+    stone_wall = Item("stone_wall")
+    r_stone_wall = Recipe(0.5, (stone_wall, 1), (stone_brick, 5))
+
+    water = Fluid_Raw_Resource("water", Pump)
+    f_r_water = Fluid_Recipe(1, (water, 1200), (water, 1200))
+
+    steam = Fluid_Item("steam", Fluid_Assembly)
+    f_r_steam = Fluid_Recipe(1, (steam, 60), (water, 60))
+
+    crude_oil = Fluid_Raw_Resource("crude_oil", Pump)
+    f_r_crude_oil = Fluid_Recipe(1, (crude_oil, 100), (crude_oil, 100))
+
+    heavy_oil = Fluid_Item("heavy_oil", Fluid_Assembly)
+    light_oil = Fluid_Item("light_oil", Fluid_Assembly)
+    petroleum_gas = Fluid_Item("petroleum_gas", Fluid_Assembly)
+    sulfuric_acid = Fluid_Item("sulfuric_acid", Fluid_Assembly)
+
+    basic_oil = Fluid_Recipe(5, (petroleum_gas, 45), (crude_oil, 100), "basic_oil_processing")
+
+    advanced_oil = Fluid_Recipe(5, ((heavy_oil, 25), (light_oil, 45), (petroleum_gas, 55)),
+                                ((crude_oil, 100), (water, 50)), "advanced_oil_processing")
+    coal_liquefaction = Fluid_Recipe(5, ((heavy_oil, 90), (light_oil, 20), (petroleum_gas, 10)),
+                                     ((coal, 10), (heavy_oil, 25), (steam, 50)), "coal_liquefaction")
+
+    heavy_cracking = Fluid_Recipe(2, (light_oil, 30), ((heavy_oil, 40), (water, 30)))
+    light_cracking = Fluid_Recipe(2, (petroleum_gas, 20), ((light_oil, 30), (water, 30)))
+
+    solid_fuel = Item("solid_fuel")
+    rocket_fuel = Item("rocket_fuel")
+    plastic_bar = Item("plastic_bar", Fluid_Assembly)
+    sulfur = Item("sulfur", Fluid_Assembly)
+
+    heavy_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (heavy_oil, 20), "heavy_oil_to_solid_fuel")
+    light_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (light_oil, 10), "light_oil_to_solid_fuel")
+    petroleum_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (petroleum_gas, 20), "petroleum_gas_to_solid_fuel")
+
+    r_rocket_fuel = Fluid_Recipe(30, (rocket_fuel, 1), ((light_oil, 10), (solid_fuel, 10)))
+    f_r_plastic_bar = Fluid_Recipe(1, (plastic_bar, 2), ((coal, 1), (petroleum_gas, 20)))
+    f_r_sulfur = Fluid_Recipe(1, (sulfur, 2), ((petroleum_gas, 30), (water, 30)))
+
+    f_r_sulfuric_acid = Fluid_Recipe(1, (sulfuric_acid, 50), ((iron_plate, 1), (sulfur, 5), (water, 100)))
+
+    battery = Item("battery")
+    r_battery = Fluid_Recipe(4, (battery, 1), ((copper_plate, 1), (iron_plate, 1), (sulfuric_acid, 20)))
+
+    accumulator = Item("accumulator")
+    r_accumulator = Recipe(10, (accumulator, 1), ((battery, 5), (iron_plate, 2)))
 
     iron_gear_wheel = Item("iron_gear_wheel")
     r_iron_gear_wheel = Recipe(0.5, (iron_gear_wheel, 1), (iron_plate, 2))
@@ -345,37 +373,16 @@ def init_test_data(file_overwrite=False):
     firearm_magazine = Item("firearm_magazine")
     r_firearm_magazine = Recipe(1, (firearm_magazine, 1), (iron_plate, 4))
 
-    steel_plate = Item("steel_plate", Furnace)
-    r_steel_plate = Recipe(16, (steel_plate, 1), (iron_plate, 5))
-
     piercing_rounds_magazine = Item("piercing_rounds_magazine")
     r_piercing_rounds_magazine = Recipe(3, (piercing_rounds_magazine, 1), ((copper_plate, 5),
                                                                            (firearm_magazine, 1), (steel_plate, 1)))
-
-    stone = Raw_Resource("stone", Drill)
-    r_stone = Recipe(1, (stone, 1), (stone, 1))
-
-    stone_brick = Item("stone_brick", Furnace)
-    r_stone_brick = Recipe(3.2, (stone_brick, 1), (stone, 2))
-
-    stone_wall = Item("stone_wall")
-    r_stone_wall = Recipe(0.5, (stone_wall, 1), (stone_brick, 5))
 
     military_science_pack = Item("military_science_pack")
     r_military_science_pack = Recipe(10, (military_science_pack, 2), ((grenade, 1), (piercing_rounds_magazine, 1),
                                                                       (stone_wall, 2)))
 
-    pipe = Item("pipe")
-    r_pipe = Recipe(0.5, (pipe, 1), (iron_plate, 1))
-
     engine_unit = Item("engine_unit")
     r_engine_unit = Recipe(10, (engine_unit, 1), ((iron_gear_wheel, 1), (pipe, 2), (steel_plate, 1)))
-
-    sulfur = Item("sulfur", Fluid_Assembly)
-    f_r_sulfur = Fluid_Recipe(1, (sulfur, 2), ((petroleum_gas, 30), (water, 30)))
-
-    plastic_bar = Item("plastic_bar", Fluid_Assembly)
-    f_r_plastic_bar = Fluid_Recipe(1, (plastic_bar, 2), ((coal, 1), (petroleum_gas, 20)))
 
     advanced_circuit = Item("advanced_circuit")
     r_advanced_circuit = Recipe(6, (advanced_circuit, 1), ((copper_cable, 4), (electronic_circuit, 2),
@@ -401,6 +408,37 @@ def init_test_data(file_overwrite=False):
     production_science_pack = Item("production_science_pack")
     r_production_science_pack = Recipe(21, (production_science_pack, 3), ((electric_furnace, 1),
                                                                           (productivity_module, 1), (rail, 30)))
+
+    radar = Item("radar")
+    r_radar = Recipe(0.5, (radar, 1), ((electronic_circuit, 5), (iron_gear_wheel, 5), (iron_plate, 10)))
+
+    solar_panel = Item("solar_panel")
+    r_solar_panel = Recipe(10, (solar_panel, 1), ((copper_plate, 5), (electronic_circuit, 15), (steel_plate, 5)))
+
+    speed_module = Item("speed_module")
+    r_speed_module = Recipe(15, (speed_module, 1), ((advanced_circuit, 5), (electronic_circuit, 5)))
+
+    processing_unit = Item("processing_unit")
+    r_processing_unit = Fluid_Recipe(10, (processing_unit, 1), ((advanced_circuit, 2), (electronic_circuit, 20),
+                                                                (sulfuric_acid, 5)))
+
+    rocket_control_unit = Item("rocket_control_unit")
+    r_rocket_control_unit = Recipe(30, (rocket_control_unit, 1), ((processing_unit, 1), (speed_module, 1)))
+
+    low_density_structure = Item("low_density_structure")
+    r_low_density_structure = Recipe(20, (low_density_structure, 1), ((copper_plate, 20), (plastic_bar, 5),
+                                     (steel_plate, 2)))
+
+    rocket_part = Item("rocket_part")
+    r_rocket_part = Recipe(3, (rocket_part, 1), ((low_density_structure, 10), (rocket_control_unit, 10),
+                                                 (rocket_fuel, 10)))
+
+    satellite = Item("satellite")
+    r_satellite = Recipe(5, (satellite, 1), ((accumulator, 100), (low_density_structure, 100), (processing_unit, 100),
+                                             (radar, 5), (rocket_fuel, 50), (solar_panel, 100)))
+
+    space_science_pack = Item("space_science_pack")
+    r_space_science_pack = Recipe(40.33, (space_science_pack, 1000), ((satellite, 1), (rocket_part, 100)))
 
     if file_overwrite: update_files()
 
@@ -430,15 +468,17 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
         number_to_be_crafted = recipe.output_quantity
 
     if is_first_item:
-        for output_item in recipe.get_output_item():
-            add_to_dict(total_dict, output_item, number_to_be_crafted)  # can be added if total_dict is none
+        if recipe.num_outputs == 1: add_to_dict(total_dict, recipe.output[0], number_to_be_crafted)
+        else:
+            for output_item, quantity in recipe.output:
+                add_to_dict(total_dict, output_item, number_to_be_crafted)
 
     for input_item in recipe.get_input_item():  # some form of generator
         modified_quantity = number_to_be_crafted * recipe.get_ratio(input_item)
         if not input_item.is_raw:  # if 1, non-raw or non-fluid, input.
             if input_item.has_multi:  # handles oil production or anything that has multiple recipes
                 # do multi_crafting things
-                print(f"multi: {input_item}")
+                print(f"{recipe}: {input_item}, {modified_quantity}")
             else:
                 new_recipe = Recipe.get_recipe(input_item)
                 add_to_dict(total_dict, input_item, modified_quantity)
@@ -451,9 +491,11 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
 
 read_or_write_data()
 
-r = Recipe.get_recipe("plastic_bar")
+r = Recipe.get_recipe("space_science_pack")
+n = Recipe.get_recipe("production_science_pack")
 
-t_d = recipe_crawler(r, None, 3.0, True)
+t_d = recipe_crawler(r, None, 1000, True)
+# recipe_crawler(n, t_d, 3.0)
 
 for item in t_d.items():
     print(item)
