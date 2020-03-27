@@ -42,6 +42,7 @@ TODO:
 # import pygame as p
 # from functools import total_ordering # must use, v useful
 import pickle
+import numpy as np
 
 filenames = ["recipes", "machines", "items"]
 
@@ -99,7 +100,6 @@ class Furnace(Assembly):
 
 class Recipe(object):
     recipes_list = []
-    multi_crafting_list = []
 
     def __init__(self, time_in_seconds: float, output: tuple, inputs: tuple, name=None):
         """
@@ -157,12 +157,6 @@ class Recipe(object):
             return Recipe.get_recipe_from_string(item)
         else:
             return item.get_recipe()
-
-    @staticmethod
-    def has_multi(input_item):
-        if input_item in Recipe.multi_crafting_list:
-            return True
-        else: return False
 
     def get_ratio(self, input_item):
         if self.num_inputs == 1:
@@ -246,6 +240,27 @@ class Fluid_Raw_Resource(Raw_Resource, Fluid_Handler):
 
 class Fluid_Recipe(Recipe, Fluid_Handler):
     pass
+
+
+class Multi_Craft(object):
+    item_list = []
+    quantity_list = []
+    recipe_list = set()
+    multi_matrix = None
+
+    @classmethod
+    def add_to_lists(cls, item, quantity):
+        cls.item_list.append(item)
+        cls.quantity_list.append(quantity)
+        cls.recipe_list.update(item.recipes)
+
+    @classmethod
+    def build_matrix(cls):
+        print(cls.item_list)
+        print(cls.quantity_list)
+        print(cls.recipe_list)
+
+        cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
 
 
 def pickle_write(filename: str, objects: list):
@@ -458,7 +473,7 @@ def add_to_dict(dict_to_add_to, item: Item, quantity: int):
         dict_to_add_to[item] = cur_quantity + quantity
 
 
-def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False) -> dict:
+def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False, multi_matrix = None) -> dict:
     """
     dictionary is edited in place
     """
@@ -478,8 +493,10 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
         if not input_item.is_raw:  # if 1, non-raw or non-fluid, input.
             if input_item.has_multi:  # handles oil production or anything that has multiple recipes
                 # do multi_crafting things
-                print(f"{recipe}: {input_item}, {modified_quantity}")
+                # print(f"MCR.{recipe}: {input_item}, {modified_quantity}")
+                Multi_Craft.add_to_lists(input_item, modified_quantity)
             else:
+
                 new_recipe = Recipe.get_recipe(input_item)
                 add_to_dict(total_dict, input_item, modified_quantity)
                 recipe_crawler(new_recipe, total_dict, modified_quantity)
@@ -497,8 +514,10 @@ n = Recipe.get_recipe("production_science_pack")
 t_d = recipe_crawler(r, None, 1000, True)
 # recipe_crawler(n, t_d, 3.0)
 
-for item in t_d.items():
-    print(item)
+Multi_Craft.build_matrix()
+
+# for item in t_d.items():
+#     print(item)
 
 
 # for item in Item.items_dict.values():
