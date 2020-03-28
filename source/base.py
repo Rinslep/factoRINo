@@ -46,6 +46,12 @@ import numpy as np
 
 filenames = ["recipes", "machines", "items"]
 
+def add_to_dict(dict_to_add_to, item, quantity: float):
+    if item not in dict_to_add_to.keys():
+        dict_to_add_to[item] = quantity
+    else:
+        cur_quantity = dict_to_add_to[item]
+        dict_to_add_to[item] = cur_quantity + quantity
 
 class Machine(object):
     machines_dict = {}  # string:Machine
@@ -243,23 +249,25 @@ class Fluid_Recipe(Recipe, Fluid_Handler):
 
 
 class Multi_Craft(object):
-    item_list = []
-    quantity_list = []
+    sub_total_dict = {}
+    item_list = set()
     recipe_list = set()
     multi_matrix = None
 
     @classmethod
-    def add_to_lists(cls, item, quantity):
-        cls.item_list.append(item)
-        cls.quantity_list.append(quantity)
+    def add_to_class(cls, item, quantity):
+        if item in cls.sub_total_dict:
+            cls.sub_total_dict[item] = cls.sub_total_dict[item] + quantity
+        else:
+            cls.sub_total_dict[item] = quantity
+
+        cls.item_list.update(item) # treating fluid item as itearble
         cls.recipe_list.update(item.recipes)
 
     @classmethod
     def build_matrix(cls):
-        print(cls.item_list)
-        print(cls.quantity_list)
+        print(cls.sub_total_dict)
         print(cls.recipe_list)
-
         cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
 
 
@@ -465,12 +473,7 @@ def read_or_write_data(should_init=False):
             pickle_read(fn)
 
 
-def add_to_dict(dict_to_add_to, item: Item, quantity: int):
-    if item not in dict_to_add_to.keys():
-        dict_to_add_to[item] = quantity
-    else:
-        cur_quantity = dict_to_add_to[item]
-        dict_to_add_to[item] = cur_quantity + quantity
+
 
 
 def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False, multi_matrix = None) -> dict:
@@ -494,7 +497,7 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
             if input_item.has_multi:  # handles oil production or anything that has multiple recipes
                 # do multi_crafting things
                 # print(f"MCR.{recipe}: {input_item}, {modified_quantity}")
-                Multi_Craft.add_to_lists(input_item, modified_quantity)
+                Multi_Craft.add_to_class(input_item, modified_quantity)
             else:
 
                 new_recipe = Recipe.get_recipe(input_item)
