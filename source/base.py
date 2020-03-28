@@ -250,24 +250,40 @@ class Fluid_Recipe(Recipe, Fluid_Handler):
 
 class Multi_Craft(object):
     sub_total_dict = {}
-    item_list = set()
-    recipe_list = set()
+    item_list = []
+    recipe_list = []
     multi_matrix = None
 
     @classmethod
     def add_to_class(cls, item, quantity):
         if item in cls.sub_total_dict:
+            # print(f"dict - {item}: {cls.sub_total_dict[item]} + {quantity}")
             cls.sub_total_dict[item] = cls.sub_total_dict[item] + quantity
+
         else:
+            # print(f"dict - {item}: {quantity}")
             cls.sub_total_dict[item] = quantity
 
-        cls.item_list.update(item) # treating fluid item as itearble
-        cls.recipe_list.update(item.recipes)
+        if item not in cls.item_list:
+            # print(f"list - {item}")
+            cls.item_list.append(item)
+
+        for recipe in item.recipes:
+            if recipe not in cls.recipe_list:
+                # print(f"recipe - {recipe}")
+                cls.recipe_list.append(recipe)
+                if recipe.num_inputs > 1:
+                    for inp, quan in recipe.inputs:
+                        if inp not in cls.item_list:
+                            cls.item_list.append(inp)
+                else:
+                    if recipe.inputs[0] not in cls.item_list:
+                        cls.item_list.append(recipe.inputs[0])
 
     @classmethod
     def build_matrix(cls):
-        print(cls.sub_total_dict)
-        print(cls.recipe_list)
+        # print(cls.sub_total_dict)
+        # print(cls.recipe_list)
         cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
 
 
