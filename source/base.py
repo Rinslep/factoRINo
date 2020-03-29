@@ -285,6 +285,20 @@ class Multi_Craft(object):
         # print(cls.sub_total_dict)
         # print(cls.recipe_list)
         cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
+        for recipe in cls.recipe_list:
+            cls.create_column_from_recipe(recipe, recipe.inputs, True)
+            cls.create_column_from_recipe(recipe, recipe.output, False)
+
+    @classmethod
+    def create_column_from_recipe(cls, recipe, in_out_list, negative=True):
+        if isinstance(in_out_list[0], tuple):
+            for item, quantity in in_out_list:
+                cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) \
+                                                                                             * quantity
+        else:
+            item = in_out_list[0]
+            quantity = in_out_list[1]
+            cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
 
 def pickle_write(filename: str, objects: list):
