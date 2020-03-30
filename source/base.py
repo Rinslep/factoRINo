@@ -3,32 +3,15 @@
 Useful Things - Temp(hopefully)
 https://docs.python.org/3/library/functions.html#property
 https://dbader.org/blog/python-dunder-methods
-https://stackoverflow.com/questions/34273544/how-to-check-if-a-key-value-pair-is-present-in-a-dictionary
-https://kbroman.org/github_tutorial/pages/first_time.html
 """
 
 """
-TODO:
-    Go through dunder methods, understand and add to classes.
-        maybe use add classes in either item or machine
-            this may let me forgo any extraneous calculations and have a
-            more simple idea of the process to calculate a crafting tree.
-    have everything read from recipe file:
-        currently works, but will break when you try to save
-        items/machines that are not bound to a recipe, which are going be 
-        skipped. this could be solved by unpickling other_filenames
     have a recipe_group class/dict/namespace that can take n recipes
         can have recipes grouped together to make a collection of products
         in the same place. e.g. you want to make science in one place
             maybe be able to select what items get imported into the module
             and what gets produced on site. e.g. purple science...
                 import iron plate and steel or make steel on site
-
-    HANDLE FLUIDS LOL
-        linear programming
-            http://kirkmcdonald.github.io/posts/calculation.html
-            fantastic explaination
-
     MAKE A DISPLAY
         needs to serve a purpose greater than just displaying data
             having an options menu to change a load of variables:
@@ -39,12 +22,13 @@ TODO:
                     are metaclasses useful here?
 """
 
-# import pygame as p
+# import pygame as pyg
 # from functools import total_ordering # must use, v useful
 import pickle
 import numpy as np
 
 filenames = ["recipes", "machines", "items"]
+
 
 def add_to_dict(dict_to_add_to, item, quantity: float):
     if item not in dict_to_add_to.keys():
@@ -52,6 +36,7 @@ def add_to_dict(dict_to_add_to, item, quantity: float):
     else:
         cur_quantity = dict_to_add_to[item]
         dict_to_add_to[item] = cur_quantity + quantity
+
 
 class Machine(object):
     machines_dict = {}  # string:Machine
@@ -175,21 +160,12 @@ class Recipe(object):
 
     def get_input_item(self):
         if self.num_inputs == 1:
-            yield self.inputs[0]
-            # yield StopIteration
+            yield self.inputs[0], self.inputs[1]
+            return StopIteration
         else:
-            for input, quantity in self.inputs:
-                yield input
-            # yield StopIteration
-
-    def get_output_item(self):
-        if self.num_outputs == 1:
-            return self.output[0]
-            # yield StopIteration
-        else:
-            for output, quantity in self.output:
-                yield output
-            # yield StopIteration
+            for _input, quantity in self.inputs:
+                yield _input, quantity
+            return StopIteration
 
 
 class Item(object):
@@ -272,32 +248,21 @@ class Multi_Craft(object):
             if recipe not in cls.recipe_list:
                 # print(f"recipe - {recipe}")
                 cls.recipe_list.append(recipe)
-                if recipe.num_inputs > 1:
-                    for inp, quan in recipe.inputs:
-                        if inp not in cls.item_list:
-                            cls.item_list.append(inp)
-                else:
-                    if recipe.inputs[0] not in cls.item_list:
-                        cls.item_list.append(recipe.inputs[0])
+                for _item, quantity in get_list_item_quantity(recipe.inputs):
+                        if _item not in cls.item_list:
+                            cls.item_list.append(_item)
 
     @classmethod
     def build_matrix(cls):
-        # print(cls.sub_total_dict)
-        # print(cls.recipe_list)
         cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
         for recipe in cls.recipe_list:
             cls.create_column_from_recipe(recipe, recipe.inputs, True)
             cls.create_column_from_recipe(recipe, recipe.output, False)
+            # todo add surplus cols.
 
     @classmethod
-    def create_column_from_recipe(cls, recipe, in_out_list, negative=True):
-        if isinstance(in_out_list[0], tuple):
-            for item, quantity in in_out_list:
-                cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) \
-                                                                                             * quantity
-        else:
-            item = in_out_list[0]
-            quantity = in_out_list[1]
+    def create_column_from_recipe(cls, recipe, in_out_list, negative=True):  # negative for inouts, +ve for outputs
+        for item, quantity in get_list_item_quantity(in_out_list):
             cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
 
@@ -503,46 +468,47 @@ def read_or_write_data(should_init=False):
             pickle_read(fn)
 
 
+def get_list_item_quantity(_list):
+    if not isinstance(_list[0], tuple):
+        yield _list[0], _list[1]
+        return StopIteration
+    else:
+        for item, quantity in _list:
+            yield item, quantity
+        return StopIteration
 
 
-
-def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False, multi_matrix = None) -> dict:
+def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False) -> dict:
     """
     dictionary is edited in place
     """
     if total_dict is None:
         total_dict = {}
     if number_to_be_crafted is None:
-        number_to_be_crafted = recipe.output_quantity
+        number_to_be_crafted = recipe.output_quantity  # this breaks when there's more than 1 output
 
     if is_first_item:
-        if recipe.num_outputs == 1: add_to_dict(total_dict, recipe.output[0], number_to_be_crafted)
-        else:
-            for output_item, quantity in recipe.output:
-                add_to_dict(total_dict, output_item, number_to_be_crafted)
-
-    for input_item in recipe.get_input_item():  # some form of generator
-        modified_quantity = number_to_be_crafted * recipe.get_ratio(input_item)
-        if not input_item.is_raw:  # if 1, non-raw or non-fluid, input.
-            if input_item.has_multi:  # handles oil production or anything that has multiple recipes
-                # do multi_crafting things
-                # print(f"MCR.{recipe}: {input_item}, {modified_quantity}")
-                Multi_Craft.add_to_class(input_item, modified_quantity)
+        for item, quantity in get_list_item_quantity(recipe.output):
+            add_to_dict(total_dict, item, number_to_be_crafted)
+    for item, quantity in get_list_item_quantity(recipe.inputs):
+        modified_quantity = number_to_be_crafted * recipe.get_ratio(item)
+        if not item.is_raw:
+            if item.has_multi:  # handles oil production and anything that has multiple recipes
+                Multi_Craft.add_to_class(item, modified_quantity)
             else:
-
-                new_recipe = Recipe.get_recipe(input_item)
-                add_to_dict(total_dict, input_item, modified_quantity)
-                recipe_crawler(new_recipe, total_dict, modified_quantity)
+                add_to_dict(total_dict, item, modified_quantity)
+                recipe_crawler(Recipe.get_recipe(item), total_dict, modified_quantity)
         else:  # should handle raw resources like coal and ores
-            add_to_dict(total_dict, input_item, modified_quantity)
-
+            if not is_first_item: # handles the case where the only item in the recipe is raw
+                add_to_dict(total_dict, item, modified_quantity)
     return total_dict
 
 
 read_or_write_data()
 
-r = Recipe.get_recipe("space_science_pack")
-n = Recipe.get_recipe("production_science_pack")
+r = Recipe.get_recipe("coal")  # currently broken, returns 2000 instead of 1000
+
+# r = Recipe.get_recipe("production_science_pack")
 
 t_d = recipe_crawler(r, None, 1000, True)
 # recipe_crawler(n, t_d, 3.0)
