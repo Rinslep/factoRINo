@@ -249,20 +249,52 @@ class Multi_Craft(object):
                 # print(f"recipe - {recipe}")
                 cls.recipe_list.append(recipe)
                 for _item, quantity in get_list_item_quantity(recipe.inputs):
-                        if _item not in cls.item_list:
-                            cls.item_list.append(_item)
+                    if _item not in cls.item_list:
+                        cls.item_list.append(_item)
 
     @classmethod
     def build_matrix(cls):
         cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
+        cls.init_pop()
+        cls.check_only_negative()
+        # todo add tax col
+        # todo add surplus cols
+        # todo add obj func col
+        # todo add output col
+
+        # new_matrix = np.zeros((cls.multi_matrix.shape[0], len(cls.item_list)))
+        # for i in range(len(cls.item_list)):
+        #     new_matrix[i, i] = - 1
+        # cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
+
+    @classmethod
+    def init_pop(cls):
+        """inital population of matrix"""
         for recipe in cls.recipe_list:
             cls.create_column_from_recipe(recipe, recipe.inputs, True)
             cls.create_column_from_recipe(recipe, recipe.output, False)
-            # todo add surplus cols.
 
     @classmethod
-    def create_column_from_recipe(cls, recipe, in_out_list, negative=True):  # negative for inouts, +ve for outputs
+    def check_only_negative(cls):
+        """if all row values <= 0: add a recipe for that item"""
+        for row_index in range(cls.multi_matrix.shape[0]-1):
+            row = cls.multi_matrix[row_index]
+            item = cls.item_list[row_index]
+            if not row.max() > 0:  # if all row values <= 0
+
+                new_recipe = item.recipes[0]
+                new_matrix = np.zeros((cls.multi_matrix.shape[0], 1))
+                cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
+                cls.recipe_list.append(new_recipe)
+                cls.create_column_from_recipe(new_recipe, new_recipe.output, False, 1)
+
+
+    @classmethod
+    def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
+        """negative for inouts, +ve for outputs"""
         for item, quantity in get_list_item_quantity(in_out_list):
+            if val is not None:
+                quantity = val
             cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
 
@@ -506,17 +538,16 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
 
 read_or_write_data()
 
-r = Recipe.get_recipe("coal")  # currently broken, returns 2000 instead of 1000
 
-# r = Recipe.get_recipe("production_science_pack")
+r = Recipe.get_recipe("production_science_pack")
 
 t_d = recipe_crawler(r, None, 1000, True)
 # recipe_crawler(n, t_d, 3.0)
 
 Multi_Craft.build_matrix()
 
-# for item in t_d.items():
-#     print(item)
+for item in t_d.items():
+    print(item)
 
 
 # for item in Item.items_dict.values():
