@@ -226,8 +226,10 @@ class Fluid_Recipe(Recipe, Fluid_Handler):
 
 class Multi_Craft(object):
     sub_total_dict = {}
-    item_list = []
+    base_item_list = []
     recipe_list = []
+    extra_recipe_list = []
+    raw_resources = []
     multi_matrix = None
 
     @classmethod
@@ -240,32 +242,28 @@ class Multi_Craft(object):
             # print(f"dict - {item}: {quantity}")
             cls.sub_total_dict[item] = quantity
 
-        if item not in cls.item_list:
+        if item not in cls.base_item_list:
             # print(f"list - {item}")
-            cls.item_list.append(item)
+            cls.base_item_list.append(item)
 
         for recipe in item.recipes:
             if recipe not in cls.recipe_list:
                 # print(f"recipe - {recipe}")
                 cls.recipe_list.append(recipe)
                 for _item, quantity in get_list_item_quantity(recipe.inputs):
-                    if _item not in cls.item_list:
-                        cls.item_list.append(_item)
+                    if _item not in cls.base_item_list:
+                        cls.base_item_list.append(_item)
 
     @classmethod
     def build_matrix(cls):
-        cls.multi_matrix = np.zeros((len(cls.item_list), len(cls.recipe_list)))
+        cls.multi_matrix = np.zeros((len(cls.base_item_list), len(cls.recipe_list)))
         cls.init_pop()
-        cls.check_only_negative()
-        # todo add tax col
-        # todo add surplus cols
-        # todo add obj func col
+        cls.check_recipes_list()
+        cls.surplus_cols()
+        cls.tax_row_and_col()
+        cls.get_objective_function()
+        # todo add obj func col/row
         # todo add output col
-
-        # new_matrix = np.zeros((cls.multi_matrix.shape[0], len(cls.item_list)))
-        # for i in range(len(cls.item_list)):
-        #     new_matrix[i, i] = - 1
-        # cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
 
     @classmethod
     def init_pop(cls):
@@ -275,27 +273,65 @@ class Multi_Craft(object):
             cls.create_column_from_recipe(recipe, recipe.output, False)
 
     @classmethod
-    def check_only_negative(cls):
-        """if all row values <= 0: add a recipe for that item"""
+    def check_recipes_list(cls):
         for row_index in range(cls.multi_matrix.shape[0]-1):
-            row = cls.multi_matrix[row_index]
-            item = cls.item_list[row_index]
-            if not row.max() > 0:  # if all row values <= 0
+            # row = cls.multi_matrix[row_index]
+            item = cls.base_item_list[row_index]
+            if item.is_raw:
+                cls.raw_resources.append(item)
+            for new_recipe in item.recipes:
+                if new_recipe not in item.recipes:
+                    # new_recipe = item.recipes[0]
+                    new_matrix = np.zeros((cls.multi_matrix.shape[0], 1))
+                    cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
+                    cls.extra_recipe_list.append(new_recipe)
+                    cls.create_column_from_recipe(new_recipe, new_recipe.output, False, 1)
 
-                new_recipe = item.recipes[0]
-                new_matrix = np.zeros((cls.multi_matrix.shape[0], 1))
-                cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
-                cls.recipe_list.append(new_recipe)
-                cls.create_column_from_recipe(new_recipe, new_recipe.output, False, 1)
+    @classmethod
+    def surplus_cols(cls):
+        new_matrix = np.zeros((cls.multi_matrix.shape[0], len(cls.base_item_list)))
+        for i in range(len(cls.base_item_list)):
+            new_matrix[i, i] = -1
+            cls.extra_recipe_list.append(f"s{i}")
+        cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
 
+    @classmethod
+    def tax_row_and_col(cls):
+        new_col = np.zeros((cls.multi_matrix.shape[0], 1))
+        cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
+        cls.extra_recipe_list.append("tax")
+        new_row = np.zeros(cls.multi_matrix.shape[1])
+        for i in range(len(cls.recipe_list)):
+            new_row[i] = 1
+        new_row[cls.extra_recipe_list.index("tax") + len(cls.recipe_list)] = 1
+        cls.multi_matrix = np.vstack((cls.multi_matrix, new_row))
+
+    @classmethod
+    def get_objective_function(cls):
+        abs_array = np.absolute(cls.multi_matrix[np.absolute(cls.multi_matrix) > 1])
+        max = np.max(abs_array)
+        min = np.min(abs_array)
+        max_index = np.where(np.absolute(cls.multi_matrix) == max)
+        min_index = np.where(np.absolute(cls.multi_matrix) == min)
+        print(cls.multi_matrix[max_index], cls.multi_matrix[min_index])
+        # todo figure this out ----------------
+        for arr in max_index:
+            print(arr)
+        for arr in min_index:
+            print(arr)
+
+        for x, y in max_index:
+            print(x, y, cls.multi_matrix[(x,y)])
+        for x, y in min_index:
+            print(x, y, cls.multi_matrix[(x,y)])
 
     @classmethod
     def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
-        """negative for inouts, +ve for outputs"""
+        """negative for inputs, +ve for outputs"""
         for item, quantity in get_list_item_quantity(in_out_list):
             if val is not None:
                 quantity = val
-            cls.multi_matrix[cls.item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
+            cls.multi_matrix[cls.base_item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
 
 def pickle_write(filename: str, objects: list):
@@ -531,7 +567,7 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
                 add_to_dict(total_dict, item, modified_quantity)
                 recipe_crawler(Recipe.get_recipe(item), total_dict, modified_quantity)
         else:  # should handle raw resources like coal and ores
-            if not is_first_item: # handles the case where the only item in the recipe is raw
+            if not is_first_item: # handles the case where the only item in the recipe chain is raw
                 add_to_dict(total_dict, item, modified_quantity)
     return total_dict
 
@@ -546,8 +582,8 @@ t_d = recipe_crawler(r, None, 1000, True)
 
 Multi_Craft.build_matrix()
 
-for item in t_d.items():
-    print(item)
+# for item in t_d.items():
+#     print(item)
 
 
 # for item in Item.items_dict.values():
