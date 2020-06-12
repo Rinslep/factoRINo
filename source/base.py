@@ -180,8 +180,8 @@ class Item(object):
         if self.name not in Item.items_dict.keys():
             Item.items_dict[self.name] = self
 
-        if isinstance(self, Raw_Resource) or issubclass(type(self), Raw_Resource):
-            self.is_raw = True
+        # if isinstance(self, Raw_Resource) or issubclass(type(self), Raw_Resource):
+        #     self.is_raw = True
 
         if issubclass(type(self), Fluid_Handler):
             self.is_fluid = True
@@ -207,9 +207,19 @@ class Item(object):
 
 class Raw_Resource(Item):
     """
-    Any item that doesn't have an assembler Recipe should be here # maybe not?
+    Any item that doesn't have an assembler.
     Examples would be copper/iron ore, oil, water etc.
     """
+    is_raw = True
+
+    def __init__(self, name, machine_type_crafted_in=Drill, importance=False):
+        self.name = name
+        self.crafted_in = machine_type_crafted_in
+        self.importance = importance
+        self.recipes = []
+
+        if issubclass(type(self), Fluid_Handler):
+            self.is_fluid = True
 
 
 class Fluid_Item(Item, Fluid_Handler):
@@ -225,6 +235,7 @@ class Fluid_Recipe(Recipe, Fluid_Handler):
 
 
 class Multi_Craft(object):
+    # todo implement a feature to get the pos of an item/recipe in the row/column
     sub_total_dict = {}
     base_item_list = []
     recipe_list = []
@@ -261,9 +272,8 @@ class Multi_Craft(object):
         cls.check_recipes_list()
         cls.surplus_cols()
         cls.tax_row_and_col()
-        cls.get_objective_function()
-        # todo add obj func col/row
-        # todo add output col
+        cls.objective_function_row()
+        cls.output_col()
 
     @classmethod
     def init_pop(cls):
@@ -275,10 +285,14 @@ class Multi_Craft(object):
     @classmethod
     def check_recipes_list(cls):
         for row_index in range(cls.multi_matrix.shape[0]-1):
-            # row = cls.multi_matrix[row_index]
             item = cls.base_item_list[row_index]
             if item.is_raw:
                 cls.raw_resources.append(item)
+                cls.extra_recipe_list.append(item)
+                new_col = np.zeros((cls.multi_matrix.shape[0], 1))
+                new_col[cls.base_item_list.index(item)] = 1
+                cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
+
             for new_recipe in item.recipes:
                 if new_recipe not in item.recipes:
                     # new_recipe = item.recipes[0]
@@ -307,23 +321,27 @@ class Multi_Craft(object):
         cls.multi_matrix = np.vstack((cls.multi_matrix, new_row))
 
     @classmethod
-    def get_objective_function(cls):
+    def objective_function_row(cls):
+        minimizing_items = list(cls.raw_resources)
         abs_array = np.absolute(cls.multi_matrix[np.absolute(cls.multi_matrix) > 1])
-        max = np.max(abs_array)
-        min = np.min(abs_array)
-        max_index = np.where(np.absolute(cls.multi_matrix) == max)
-        min_index = np.where(np.absolute(cls.multi_matrix) == min)
-        print(cls.multi_matrix[max_index], cls.multi_matrix[min_index])
-        # todo figure this out ----------------
-        for arr in max_index:
-            print(arr)
-        for arr in min_index:
-            print(arr)
+        new_row = np.zeros(cls.multi_matrix.shape[1])
+        for item in cls.raw_resources:
+            offset = len(cls.recipe_list)
+            if item.importance is True:
+                new_row[offset + cls.raw_resources.index(item)] = np.max(abs_array)
+            else:
+                new_row[offset + cls.raw_resources.index(item)] = np.min(abs_array)
+        new_row[cls.extra_recipe_list.index("tax") + len(cls.recipe_list)] = 1
+        cls.multi_matrix = np.vstack((cls.multi_matrix, new_row))
 
-        for x, y in max_index:
-            print(x, y, cls.multi_matrix[(x,y)])
-        for x, y in min_index:
-            print(x, y, cls.multi_matrix[(x,y)])
+    @classmethod
+    def output_col(cls):
+        new_col = np.zeros((cls.multi_matrix.shape[0], 1))
+        for item, quantity in cls.sub_total_dict.items():
+            new_col[cls.base_item_list.index(item)] = quantity
+        cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
+        cls.extra_recipe_list.append("output")
+
 
     @classmethod
     def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
@@ -333,6 +351,15 @@ class Multi_Craft(object):
                 quantity = val
             cls.multi_matrix[cls.base_item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
+    @staticmethod
+    def get_i_q_from_dict(dict):
+        if len(dict) is 1:
+            yield dict[0], dict[1]
+            return StopIteration
+        else:
+            for _item, quantity in dict:
+                yield _item, quantity
+            return StopIteration
 
 def pickle_write(filename: str, objects: list):
     with open("p_" + filename, "wb") as f:
@@ -360,7 +387,7 @@ def init_test_data(file_overwrite=False):
     coal = Raw_Resource("coal", Drill)
     r_coal = Recipe(1, (coal, 1), (coal, 1))
 
-    copper_ore = Raw_Resource("copper_ore", Drill)
+    copper_ore = Raw_Resource("copper_ore", Drill, importance=True)
     r_copper_ore = Recipe(1, (copper_ore, 1), (copper_ore, 1))
 
     copper_plate = Item("copper_plate", Furnace)
@@ -369,7 +396,7 @@ def init_test_data(file_overwrite=False):
     copper_cable = Item("copper_cable")
     r_copper_cable = Recipe(0.5, (copper_cable, 2), (copper_plate, 1))
 
-    iron_ore = Raw_Resource("iron_ore", Drill)
+    iron_ore = Raw_Resource("iron_ore", Drill, importance=True)
     r_iron_ore = Recipe(1, (iron_ore, 1), (iron_ore, 1))
 
     iron_plate = Item("iron_plate", Furnace)
@@ -396,7 +423,7 @@ def init_test_data(file_overwrite=False):
     steam = Fluid_Item("steam", Fluid_Assembly)
     f_r_steam = Fluid_Recipe(1, (steam, 60), (water, 60))
 
-    crude_oil = Fluid_Raw_Resource("crude_oil", Pump)
+    crude_oil = Fluid_Raw_Resource("crude_oil", Pump, importance=True)
     f_r_crude_oil = Fluid_Recipe(1, (crude_oil, 100), (crude_oil, 100))
 
     heavy_oil = Fluid_Item("heavy_oil", Fluid_Assembly)
