@@ -351,15 +351,6 @@ class Multi_Craft(object):
                 quantity = val
             cls.multi_matrix[cls.base_item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
-    @staticmethod
-    def get_i_q_from_dict(dict):
-        if len(dict) is 1:
-            yield dict[0], dict[1]
-            return StopIteration
-        else:
-            for _item, quantity in dict:
-                yield _item, quantity
-            return StopIteration
 
 def pickle_write(filename: str, objects: list):
     with open("p_" + filename, "wb") as f:
