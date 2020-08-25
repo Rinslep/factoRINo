@@ -15,7 +15,7 @@ https://dbader.org/blog/python-dunder-methods
     MAKE A DISPLAY
         needs to serve a purpose greater than just displaying data
             having an options menu to change a load of variables:
-                modules, beacons
+                modules, beacons, modded items/modules/beacons
             add new recipes, items or machines 
                 all with their own custom variables
                     use type to produce custom classes?
@@ -23,10 +23,10 @@ https://dbader.org/blog/python-dunder-methods
 """
 
 # import pygame as pyg
-# from functools import total_ordering # must use, v useful
 import pickle
 import numpy as np
 
+# from functools import total_ordering # must use, v useful
 filenames = ["recipes", "machines", "items"]
 
 
@@ -194,7 +194,7 @@ class Item(object):
         # print(f"{self}: {recipe.name}")
 
     @property
-    def has_multi(self):
+    def has_multiple_recipes(self):
         return len(self.recipes) > 1
 
     @staticmethod
@@ -235,7 +235,6 @@ class Fluid_Recipe(Recipe, Fluid_Handler):
 
 
 class Multi_Craft(object):
-    # todo implement a feature to get the pos of an item/recipe in the row/column
     sub_total_dict = {}
     base_item_list = []
     recipe_list = []
@@ -273,6 +272,7 @@ class Multi_Craft(object):
         cls.surplus_cols()
         cls.tax_row_and_col()
         cls.objective_function_row()
+        cls.c_col()
         cls.output_col()
 
     @classmethod
@@ -322,7 +322,6 @@ class Multi_Craft(object):
 
     @classmethod
     def objective_function_row(cls):
-        minimizing_items = list(cls.raw_resources)
         abs_array = np.absolute(cls.multi_matrix[np.absolute(cls.multi_matrix) > 1])
         new_row = np.zeros(cls.multi_matrix.shape[1])
         for item in cls.raw_resources:
@@ -342,6 +341,12 @@ class Multi_Craft(object):
         cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
         cls.extra_recipe_list.append("output")
 
+    @classmethod
+    def c_col(cls):
+        new_col = np.zeros((cls.multi_matrix.shape[0], 1))
+        new_col[-1] = 1
+        cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
+        cls.extra_recipe_list.append("c")
 
     @classmethod
     def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
@@ -351,26 +356,36 @@ class Multi_Craft(object):
                 quantity = val
             cls.multi_matrix[cls.base_item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
 
+    @classmethod
+    def simplex(cls):
+        # todo divide pivot col values into the output col values - lowest = pivot row
+        # todo make pivot value == 1 by multiplying the row by (1/value)
+        # todo make other column values == 0 by taking away a multiple of the pivot row on each other row
+        most_pos = np.int_(np.max(cls.multi_matrix[-1]))
+        pos_col = list(cls.multi_matrix[-1]).index(most_pos)
+        low = float('-inf')
+        for n in range(cls.multi_matrix.shape[0]):
+            pass
+            # todo fix this by ensuring standard form
+                # low = min(low, cls.multi_matrix[n, -1] / cls.multi_matrix[n, pos_col])
 
 def pickle_write(filename: str, objects: list):
     with open("p_" + filename, "wb") as f:
         for obj in objects:
             pickle.dump(obj, f)
 
-
 def pickle_read(filename: str):
     with open("p_" + filename, "rb") as f:
         print("Read file: {}".format(filename))
         pickle.load(f)
-
 
 def update_files():
     pickle_write("items", list(Item.items_dict.values()))
     pickle_write("machines", list(Machine.machines_dict.values()))
     pickle_write("recipes", list(Recipe.recipes_list))
 
-
 def init_test_data(file_overwrite=False):
+
     m_mining_drill = Drill("mining_drill", 0.5, 3)
     m_stone_furnace = Furnace("stone_furnace", 1, 0)
     m_boiler = Fluid_Assembly("boiler", 1, 0)
@@ -579,7 +594,7 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
     for item, quantity in get_list_item_quantity(recipe.inputs):
         modified_quantity = number_to_be_crafted * recipe.get_ratio(item)
         if not item.is_raw:
-            if item.has_multi:  # handles oil production and anything that has multiple recipes
+            if item.has_multiple_recipes:  # handles oil production and anything that has multiple recipes
                 Multi_Craft.add_to_class(item, modified_quantity)
             else:
                 add_to_dict(total_dict, item, modified_quantity)
@@ -593,13 +608,14 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
 read_or_write_data()
 
 
-r = Recipe.get_recipe("production_science_pack")
-
-t_d = recipe_crawler(r, None, 1000, True)
-# recipe_crawler(n, t_d, 3.0)
-
-Multi_Craft.build_matrix()
-
+# r = Recipe.get_recipe("production_science_pack")
+#
+# t_d = recipe_crawler(r, None, 1000, True)
+# # recipe_crawler(n, t_d, 3.0)
+#
+# Multi_Craft.build_matrix()
+# Multi_Craft.simplex()
+#
 # for item in t_d.items():
 #     print(item)
 
