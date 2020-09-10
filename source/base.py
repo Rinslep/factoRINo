@@ -268,7 +268,6 @@ class Multi_Craft(object):
     def build_matrix(cls):
         cls.multi_matrix = np.zeros((len(cls.base_item_list), len(cls.recipe_list)))
         cls.init_pop()
-        cls.check_recipes_list()
         cls.surplus_cols()
         cls.tax_row_and_col()
         cls.objective_function_row()
@@ -282,8 +281,6 @@ class Multi_Craft(object):
             cls.create_column_from_recipe(recipe, recipe.inputs, True)
             cls.create_column_from_recipe(recipe, recipe.output, False)
 
-    @classmethod
-    def check_recipes_list(cls):
         for row_index in range(cls.multi_matrix.shape[0]-1):
             item = cls.base_item_list[row_index]
             if item.is_raw:
@@ -305,7 +302,7 @@ class Multi_Craft(object):
     def surplus_cols(cls):
         new_matrix = np.zeros((cls.multi_matrix.shape[0], len(cls.base_item_list)))
         for i in range(len(cls.base_item_list)):
-            new_matrix[i, i] = -1
+            new_matrix[i, i] = 1
             cls.extra_recipe_list.append(f"s{i}")
         cls.multi_matrix = np.hstack((cls.multi_matrix, new_matrix))
 
@@ -327,9 +324,9 @@ class Multi_Craft(object):
         for item in cls.raw_resources:
             offset = len(cls.recipe_list)
             if item.importance is True:
-                new_row[offset + cls.raw_resources.index(item)] = np.max(abs_array)
+                new_row[offset + cls.raw_resources.index(item)] = -np.max(abs_array)
             else:
-                new_row[offset + cls.raw_resources.index(item)] = np.min(abs_array)
+                new_row[offset + cls.raw_resources.index(item)] = -np.min(abs_array)
         new_row[cls.extra_recipe_list.index("tax") + len(cls.recipe_list)] = 1
         cls.multi_matrix = np.vstack((cls.multi_matrix, new_row))
 
@@ -348,9 +345,9 @@ class Multi_Craft(object):
         cls.multi_matrix = np.hstack((cls.multi_matrix, new_col))
         cls.extra_recipe_list.append("c")
 
+    """negative for inputs, positive for outputs"""
     @classmethod
     def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
-        """negative for inputs, +ve for outputs"""
         for item, quantity in get_list_item_quantity(in_out_list):
             if val is not None:
                 quantity = val
@@ -361,29 +358,33 @@ class Multi_Craft(object):
         # todo divide pivot col values into the output col values - lowest = pivot row
         # todo make pivot value == 1 by multiplying the row by (1/value)
         # todo make other column values == 0 by taking away a multiple of the pivot row on each other row
-        most_pos = np.int_(np.max(cls.multi_matrix[-1]))
-        pos_col = list(cls.multi_matrix[-1]).index(most_pos)
-        low = float('-inf')
-        for n in range(cls.multi_matrix.shape[0]):
-            pass
-            # todo fix this by ensuring standard form
-                # low = min(low, cls.multi_matrix[n, -1] / cls.multi_matrix[n, pos_col])
+        most_neg = np.int_(np.min(cls.multi_matrix[-1]))
+        neg_col = list(cls.multi_matrix[-1]).index(most_neg)
+        lowest_ratio = float('inf')
+        for idx, row in enumerate(cls.multi_matrix):
+            print(f"row {idx}: {row}")
+            # lowest_ratio = min(lowest_ratio, )
+
 
 def pickle_write(filename: str, objects: list):
     with open("p_" + filename, "wb") as f:
         for obj in objects:
             pickle.dump(obj, f)
 
+
 def pickle_read(filename: str):
     with open("p_" + filename, "rb") as f:
         print("Read file: {}".format(filename))
         pickle.load(f)
+
 
 def update_files():
     pickle_write("items", list(Item.items_dict.values()))
     pickle_write("machines", list(Machine.machines_dict.values()))
     pickle_write("recipes", list(Recipe.recipes_list))
 
+
+# todo please remove me :)
 def init_test_data(file_overwrite=False):
 
     m_mining_drill = Drill("mining_drill", 0.5, 3)
@@ -608,16 +609,16 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
 read_or_write_data()
 
 
-# r = Recipe.get_recipe("production_science_pack")
-#
-# t_d = recipe_crawler(r, None, 1000, True)
-# # recipe_crawler(n, t_d, 3.0)
-#
-# Multi_Craft.build_matrix()
-# Multi_Craft.simplex()
-#
-# for item in t_d.items():
-#     print(item)
+r = Recipe.get_recipe("production_science_pack")
+
+t_d = recipe_crawler(r, None, 1000, True)
+# recipe_crawler(n, t_d, 3.0)
+
+Multi_Craft.build_matrix()
+Multi_Craft.simplex()
+
+for item in t_d.items():
+    print(item)
 
 
 # for item in Item.items_dict.values():
