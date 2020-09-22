@@ -14,17 +14,16 @@ class Node(object):
         self.radius = radius
         self.image = PhotoImage(file=self.image_folder+'/deault_circle.png')
         Node.nodes.append(self)
-        self.create_node()
+        self.oval_id = None
+        self.create_oval_node()
+        self.raise_node()
+        self.lastx, self.lasty = self.tl
+        self.connections = {}
 
-    def create_node(self):
-        # print(self.image)
-        a = Button(self.window, image=self.image, width=14, height=14, bg='#AAAAAA', activebackground='#AAAAAA', relief=FLAT)
-        a.place(x=self.tl[0], y=self.tl[1])
-        return a
-
-    def reveal(self):
-        a = self.window.itemconfigure('oval')
-        print(a)
+    def create_oval_node(self):
+        self.oval_id = self.window.create_oval(self.tl, self.br, fill='red')
+        self.window.tag_bind(self.oval_id, '<Button-1>', lambda e: self.move(e))
+        self.window.tag_bind(self.oval_id, '<B1-Motion>', lambda e: self.move(e), add='+')
 
     @property
     def canvas_width(self):
@@ -50,24 +49,44 @@ class Node(object):
         br[1] = int(br[1] + self.radius)
         return br
 
-    @staticmethod
-    def move(e):
-        print(e)
+    def add_connection(self, node, line):
+        self.connections[node] = line
+
+    def move(self, e):
+        self.lastx, self.lasty = self.tl
+        self.centre = (e.y * self.canvas_width) + e.x
+        self.window.move(self.oval_id, self.tl[0] - self.lastx, self.tl[1] - self.lasty)
+        self.lastx, self.lasty = self.tl
+        self.move_connected_lines()
+        self.raise_node()
+
+    def move_connected_lines(self):
+        for line in self.connections.values():
+            line.move()
+
+    def raise_node(self):
+        self.window.tag_raise(self.oval_id)
+
+    def connected(self, other):
+        return self.connections.keys().__contains__(other)
 
     @classmethod
-    def show_nodes(cls):
-        for node in Node.nodes:
-            node.reveal()
+    def check_connection(cls, a, b):
+        return a.connected(b)
 
 
 class Line(object):
     lines = []
 
-    def __init__(self, a, b):
+    def __init__(self, window, a, b):
+        self.window = window
         self.a = a
         self.b = b
-
+        self.id = None
+        self.create_line()
         Line.lines.append(self)
+        a.add_connection(b, self)
+        b.add_connection(a, self)
 
     @property
     def a_centre(self):
@@ -77,14 +96,21 @@ class Line(object):
     def b_centre(self):
         return self.b.centre_coords
 
-    @classmethod
-    def draw_lines(cls, window):
-        for line in Line.lines:
-            window.create_line(line.a_centre, line.b_centre, fill='black', width=2)
+    def move(self):
+        self.window.coords(self.id, *self.a_centre, *self.b_centre)
+
+    def create_line(self):
+        self.id = self.window.create_line(self.a_centre, self.b_centre, fill='black', width=2)
+
+
+class LineExistsError(Exception):
+    print('Line already created, back you go!')
+    pass
 
 
 root = Tk()
 root.title('factoRINo')
+
 
 HEIGHT = 500
 WIDTH = int(HEIGHT * (16 / 9))
@@ -99,16 +125,17 @@ for i in range(20):
 
 # create lines
 for i in range(20):
-    node_a = choice(list(Node.nodes))
-    node_b = choice(list(Node.nodes))
-    Line(node_a, node_b)
+    while True:
+        try:
+            node_a = choice(list(Node.nodes))
+            node_b = choice(list(Node.nodes))
+            Node.check_connection(node_a, node_b)
+            break
+        except LineExistsError:
+            print('line exists, trying again')
+    Line(canvas, node_a, node_b)
 
-#https://stackoverflow.com/questions/49699802/understanding-tkinter-tag-bind
 
 while __name__ == '__main__':
-    canvas.delete(ALL)
-    for node in Node.nodes:
-        node.create_node()
-    Line.draw_lines(canvas)
     root.mainloop()
 
