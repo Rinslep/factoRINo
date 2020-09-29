@@ -2,6 +2,8 @@ from pathlib import Path
 from zipfile import ZipFile
 from urllib3 import PoolManager
 
+from source.base import Recipe
+
 
 class Data(object):
     data_folder_path = Path().absolute().parent / 'data'
@@ -62,10 +64,17 @@ class Data(object):
             print('not data file')
             return None
         text_stream = text_stream.partition(check_text)[2]
+        ingredients = ()
+        is_ingredient = False
         for data_line in text_stream.split(b'\n  {\n    '):
-            print(data_line)
-            for line in data_line.split(b'\n    '):
-                print(line.partition(B' = '))
+            if data_line != b'' and data_line.startswith(b'type = "recipe"'):
+                dl = data_line.partition(b'type = "recipe",')[2]
+                Recipe.recipe_from_string(dl)
+                # print(dl)
+        # print(Recipe.recipes_list)
+
+
+
 
     # https://note.nkmk.me/en/python-check-int-float/
     @staticmethod
@@ -128,7 +137,7 @@ class Data(object):
                 file.write(version + '\n')
 
 
-print(*Data.get_all_versions(), sep='\n')
+# print(*Data.get_all_versions(), sep='\n')
 d = Data('1.0.0')
 d.data_extender(d.read_data_from_zip())
 

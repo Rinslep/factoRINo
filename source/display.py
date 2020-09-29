@@ -67,12 +67,10 @@ class Node(object):
     def raise_node(self):
         self.window.tag_raise(self.oval_id)
 
-    def connected(self, other):
-        return self.connections.keys().__contains__(other)
-
     @classmethod
-    def check_connection(cls, a, b):
-        return a.connected(b)
+    def is_connected(cls, a, b):
+        if b in a.connections.keys():
+            raise LineExistsError
 
 
 class Line(object):
@@ -104,7 +102,6 @@ class Line(object):
 
 
 class LineExistsError(Exception):
-    print('Line already created, back you go!')
     pass
 
 
@@ -115,26 +112,29 @@ root.title('factoRINo')
 HEIGHT = 500
 WIDTH = int(HEIGHT * (16 / 9))
 
-canvas = Canvas(root, width=WIDTH, height=HEIGHT, bg='#AAAAAA')
-canvas.pack(padx=50, pady=50, ipadx=10, ipady=10)
+canvas = Canvas(root, height=HEIGHT, width=WIDTH, bg='#AAAAAA')
+canvas.pack(padx=50, pady=50, ipadx=10, ipady=10, side=LEFT)
 # create nodes
-for i in range(20):
+for i in range(100):
     c = randint(0, (WIDTH * HEIGHT))
     r = 10
     Node(canvas, c, r)
 
 # create lines
-for i in range(20):
+for i in range(150):
     while True:
         try:
             node_a = choice(list(Node.nodes))
             node_b = choice(list(Node.nodes))
-            Node.check_connection(node_a, node_b)
+            Node.is_connected(node_a, node_b)
             break
         except LineExistsError:
-            print('line exists, trying again')
+            pass
+    # print(f'a:{node_a}, b:{node_b}')
     Line(canvas, node_a, node_b)
 
+for node in Node.nodes:
+    node.raise_node()
 
 while __name__ == '__main__':
     root.mainloop()

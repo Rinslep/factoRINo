@@ -167,6 +167,69 @@ class Recipe(object):
                 yield _input, quantity
             return StopIteration
 
+    @classmethod
+    def recipe_from_string(cls, string):
+        #https://regexr.com/5cj77
+        #https://regexr.com/5cjci
+        import re
+        s = string.decode('ascii')
+        time, output, inputs, name, next_item = None, [], [], None, None
+        wait = False
+        pattern = re.compile(r'''((order){1}.*)|
+                                    ((icon){1}.*)|
+                                    ((enabled){1}.*)|
+                                    ((allow_decomposition){1}.*)|
+                                    ((requester_paste_multiplier){1}.*)|
+                                    ((subgroup){1}.*)|
+                                    ((crafting_machine_tint){1}.*)|
+                                    ((primary){1}.*)|
+                                    ((secondary){1}.*)|
+                                    ((tertiary){1}.*)|
+                                    ((quaternary){1}.*)|
+                                    ((main_product){1}.*)''', re.VERBOSE)
+        st = pattern.sub('', s)
+        # print(st)
+        pattern = re.compile(r'[A-Za-z0-9-_]+')
+        word_list = ['name', 'energy_required', 'result_count', 'ingredients', 'result', 'expensive']
+        ingredients_list = ['name', 'type', 'amount']
+        for word in pattern.finditer(st):
+            data = str(word.group())
+            # print(f'{word.group()}, {word.start()}')
+            if next_item == 'expensive':
+                break
+
+            if next_item == 'name':
+                output.append(str(word.group()))
+                next_item = None
+                continue
+
+            if next_item == 'result_count':
+                output.append(str(word.group()))
+                next_item = None
+                continue
+
+            if next_item == 'energy_required':
+                time = str(word.group())
+                next_item = None
+                continue
+
+            if next_item == 'ingredients':
+                if str(word.group()) in word_list:
+                    if str(word.group()) in ingredients_list:
+                        next_item = 'ingredients'
+                        continue
+                    next_item = str(word.group())
+                else:
+                    inputs.append(str(word.group()))
+                    continue
+
+            if str(word.group()) in word_list:
+                next_item = str(word.group())
+            else:
+                next_item = None
+
+        print(f'{output}, from {inputs}, in {time}s')
+
 
 class Item(object):
     items_dict = {}
@@ -606,19 +669,19 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
     return total_dict
 
 
-read_or_write_data()
-
-
-r = Recipe.get_recipe("production_science_pack")
-
-t_d = recipe_crawler(r, None, 1000, True)
-# recipe_crawler(n, t_d, 3.0)
-
-Multi_Craft.build_matrix()
-Multi_Craft.simplex()
-
-for item in t_d.items():
-    print(item)
+# read_or_write_data()
+#
+#
+# r = Recipe.get_recipe("production_science_pack")
+#
+# t_d = recipe_crawler(r, None, 1000, True)
+# # recipe_crawler(n, t_d, 3.0)
+#
+# Multi_Craft.build_matrix()
+# Multi_Craft.simplex()
+#
+# for item in t_d.items():
+#     print(item)
 
 
 # for item in Item.items_dict.values():
