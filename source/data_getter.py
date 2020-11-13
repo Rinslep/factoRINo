@@ -1,18 +1,25 @@
 from pathlib import Path
 from zipfile import ZipFile
-from urllib3 import PoolManager
 
-from source.base import Recipe
+from urllib3 import PoolManager
+from urllib3.exceptions import MaxRetryError
 
 
 class Data(object):
     data_folder_path = Path().absolute().parent / 'data'
     latest_version = '0.5.0'
+    suffixes = ['demo-recipe', 'capsule', 'circuit-network', 'demo-furnace-recipe', 'demo-recipe',
+                'demo-turret', 'equipment', 'fluid-recipe', 'inserter', 'module', 'recipe', 'turret']
 
     def __init__(self, version_number='0.5.0', file_type='.zip'):
         self.version_number = version_number
         self.file_type = file_type
-        Data.latest_version = Data.get_latest_version()
+        try:
+            Data.latest_version = Data.get_latest_version()
+        except MaxRetryError:
+            # when no connection
+            # todo have a function to get the latest version in data folder
+            Data.latest_version = '1.0.0'
         # Data.download_file(Data.latest_version)
 
     # todo version changer, maybe have a dropdown box
@@ -30,6 +37,7 @@ class Data(object):
         out_path = Data.data_folder_path / out_name
 
         if Path.exists(out_path):
+            # todo check if user wants to overwrite
             raise FileExistsError("File is already downloaded")
         else:
             # https: // stackoverflow.com / a / 7244263 / 2295388
@@ -45,13 +53,16 @@ class Data(object):
             with urllib.request.urlopen(base_url + file_name) as response, open(out_path, 'wb') as out_file:
                 shutil.copyfileobj(response, out_file)
 
-    def read_data_from_zip(self):
-        file_name = 'factorio-data-' + self.version_number + '.zip'
+    def read_relevant_files(self):
+        for suffix in Data.get_suffixes():
+            yield self.read_data_from_zip(suffix)
 
+    def read_data_from_zip(self, suffix):
+        file_name = 'factorio-data-' + self.version_number + '.zip'
         with ZipFile(Data.data_folder_path / file_name, 'r') as my_zip:
             folder_name = my_zip.filelist[0].filename
             try:
-                text_stream = my_zip.read(folder_name + 'base/prototypes/recipe/recipe.lua')
+                text_stream = my_zip.read(folder_name + suffix)
                 return text_stream
             except FileNotFoundError as e:
                 raise e
@@ -59,22 +70,24 @@ class Data(object):
     # todo recipe data parser - parse data from lua into base classes, maybe have classes handle it themselves
     @staticmethod
     def data_extender(text_stream):
-        check_text = b'data:extend(\n{'
-        if not text_stream.startswith(check_text):  # some files do not start with check text
-            print('not data file')
-            return None
-        text_stream = text_stream.partition(check_text)[2]
-        ingredients = ()
-        is_ingredient = False
-        for data_line in text_stream.split(b'\n  {\n    '):
-            if data_line != b'' and data_line.startswith(b'type = "recipe"'):
-                dl = data_line.partition(b'type = "recipe",')[2]
-                Recipe.recipe_from_string(dl)
+        check_text =b'data:extend(\n{', b'data:extend\n{'
+        text_stream = text_stream.lstrip()
+        for txt in check_text:
+            if not text_stream.startswith(txt):  # some files do not start with check text
+                #this doesnt handle capsule.lua
+                # print('not data file')
+                continue
+            text_stream = text_stream.partition(txt)[2]
+            for data_line in text_stream.split(b'\n  {\n    '):
+                if data_line != b'' and data_line.startswith(b'type = "recipe"'):
+                    dl = data_line.partition(b'type = "recipe",')[2]
+                    yield dl
+            break
                 # print(dl)
-        # print(Recipe.recipes_list)
-
-
-
+        # for recipe in Recipe.recipes_list:
+        #     print(recipe)
+        # for v in Item.items_dict.values():
+        #     print(v)
 
     # https://note.nkmk.me/en/python-check-int-float/
     @staticmethod
@@ -89,11 +102,15 @@ class Data(object):
     # https://stackoverflow.com/questions/645312/what-is-the-quickest-way-to-http-get-in-python/54856660#54856660
     @staticmethod
     def get_latest_version():
-        http = PoolManager()
-        r = http.request('GET', 'https://raw.githubusercontent.com/wube/factorio-data/master/base/info.json')
-        line = r.data.decode('utf-8').split('  "version": "')[1]
-        current_version = line.split('"')[0]
-        return current_version
+        try:
+            http = PoolManager()
+            r = http.request('GET', 'https://raw.githubusercontent.com/wube/factorio-data/master/base/info.json')
+            line = r.data.decode('utf-8').split('  "version": "')[1]
+            current_version = line.split('"')[0]
+            return current_version
+        except MaxRetryError:
+            # todo handle this error by searching files to get latest version
+            return '1.0.0'
 
     @staticmethod
     def get_all_versions():
@@ -136,9 +153,17 @@ class Data(object):
             for version in versions:
                 file.write(version + '\n')
 
+    @classmethod
+    def get_suffixes(cls):
+        for suffix in cls.suffixes:
+            s = suffix
+            suffix = f'base/prototypes/recipe/{s}.lua'
+            yield str(suffix)
+        return StopIteration
+
 
 # print(*Data.get_all_versions(), sep='\n')
-d = Data('1.0.0')
-d.data_extender(d.read_data_from_zip())
+# d = Data('1.0.0')
+
 
 

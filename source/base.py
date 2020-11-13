@@ -4,6 +4,7 @@ Useful Things - Temp(hopefully)
 https://docs.python.org/3/library/functions.html#property
 https://dbader.org/blog/python-dunder-methods
 """
+from source.data_getter import Data
 
 """
     have a recipe_group class/dict/namespace that can take n recipes
@@ -53,13 +54,10 @@ class Machine(object):
         return "{}('{}',{},{})".format(type(self).__name__, self.name, self.crafting_speed, self.module_slots)
 
 
-class Fluid_Handler(object):
-    """
-    This will be a parent class of anything that needs to handle fluids.
-    Fluids wont be put in for a while, but this placeholder means I can structure the program better for the future.
-    Will need to have a fluid dict and add it to update_files
-    """
-    pass
+class Liquid(object):
+    def __init__(self, name):
+
+        pass
 
 
 class Drill(Machine):
@@ -67,12 +65,12 @@ class Drill(Machine):
     pass
 
 
-class Drill_Using_Fluid(Drill, Fluid_Handler):
+class Drill_Using_Fluid(Drill, Liquid):
     # used only for uranium mining
     pass
 
 
-class Pump(Drill, Fluid_Handler):
+class Pump(Drill, Liquid):
     # oil and water
     pass
 
@@ -81,9 +79,11 @@ class Assembly(Machine):
     pass
 
 
-class Fluid_Assembly(Assembly, Fluid_Handler):
+class Fluid_Assembly(Assembly, Liquid):
     pass
 
+class Rocket_Assembly(Assembly):
+    pass
 
 class Furnace(Assembly):
     pass
@@ -91,52 +91,118 @@ class Furnace(Assembly):
 
 class Recipe(object):
     recipes_list = []
+    categories = {'rocket-building': Rocket_Assembly,
+                  'crafting': Assembly,
+                  'crafting-with-fluid': Fluid_Assembly,
+                  'chemistry': Fluid_Assembly,
+                  'centrifuging': Assembly,
+                  'oil-processing': Fluid_Assembly,
+                  'drill': Drill}
 
-    def __init__(self, time_in_seconds: float, output: tuple, inputs: tuple, name=None):
-        """
-        output and inputs expects a tuple of format (item:Item, quantity:int)
-        """
+    # list_function = {1: l_f(li), 2:l_f(li), 3:l_f(li)} # one item, at least 2 items, items with probability
+
+    def __init__(self, time_in_seconds: float, output, inputs, name, category='crafting'):
+
         self.time = time_in_seconds
         self.output = output
         self.inputs = inputs
-        if name is not None:
-            self.name = name
-        else:
-            self.name = self.output[0]
-        # for item in self.get_output_item():
-        #     item.add_possible_recipe(self)
-        if self.num_outputs == 1:
-            self.output[0].add_possible_recipe(self)
-        else:
-            for item, quantity in self.output:
-                item.add_possible_recipe(self)
+        self.category = category
+        self.name = name
+
+
+        #     try:
+        #         p = o[2]
+        #     except IndexError:
+        #         p = 1
+        #     try:
+        #         item = Item.get_item_from_string(o[0])
+        #     except KeyError:
+        #         item = Item(o[0])
+        #
+        #     self.inputs[idx][1] = int(o[1])
+        #
+        # for idx, o in enumerate(output):
+        #     try:
+        #         p = o[2]
+        #     except IndexError:
+        #         p = 1
+        for idx, i in enumerate(self.inputs):
+            item = Item.get_item_from_string(i[0])
+            self.inputs[idx][0] = item
+            self.inputs[idx][1] = int(i[1])
+
+        for idx, o in enumerate(self.output):
+            item = Item.get_item_from_string(o[0])
+            item.recipes.append(self)
+
+            self.output[idx][1] = int(o[1])
+
         if self not in Recipe.recipes_list:
             Recipe.recipes_list.append(self)
 
     def __repr__(self):
-        return "{}({},{},{})".format(type(self).__name__, self.time, self.output, self.inputs)
+        return f"{type(self).__name__}({self.time},{self.output},{self.inputs})"
 
     @property
     def output_quantity(self):
-        return self.output[1]
+        # todo ensure this takes into account probability
+        return self.output[0][1]
 
-    @property
-    def num_inputs(self):
-        if not isinstance(self.inputs[0], tuple):
-            return 1
-        else:
-            return len(self.inputs)
+    # @property
+    # def num_inputs(self):
+    #     if not isinstance(self.inputs[0], tuple):
+    #         return 1
+    #     else:
+    #         return len(self.inputs)
+    #
+    # @property
+    # def num_outputs(self):
+    #     if not isinstance(self.output[0], tuple):
+    #         return 1
+    #     else:
+    #         return len(self.output)
 
-    @property
-    def num_outputs(self):
-        if not isinstance(self.output[0], tuple):
-            return 1
-        else:
-            return len(self.output)
+    @staticmethod
+    def get_tuple_from_list(li):
+        items = []
+        count = 0
+
+        for idx, val in enumerate(li):
+            # the order here is important
+            if val == 'probability':
+                items.pop()
+                items.append([li[idx - 1], li[idx + 2], li[idx + 1]])
+                count = 2
+            elif count > 0:
+                count -= 1
+                continue
+            elif val == 'item':
+                items.append([li[idx + 1], li[idx + 2]])
+                count = 2
+            elif val == 'fluid':
+                items.append([li[idx + 1], li[idx + 2]])
+                count = 2
+            # elif val == 'probability':
+            #     items.push((li[idx - 1], li[idx + 2], li[idx + 1]))
+            #     count = 2
+            elif val == 'fluidbox_index':
+                count = 1
+                continue
+            elif count == 0:
+                try:
+                    items.append([li[idx], li[idx+1]])
+                    count += 1
+                except IndexError as e:
+                    print(e, li, idx)
+                    break
+
+        return items
 
     @staticmethod
     def get_recipe_from_string(s: str):
-        return Item.get_item_from_string(s).recipes[0]
+        item = Item.get_item_from_string(s)
+        return item.recipes[0]
+
 
     @staticmethod
     def get_recipe(item):
@@ -150,85 +216,22 @@ class Recipe(object):
             return item.get_recipe()
 
     def get_ratio(self, input_item):
-        if self.num_inputs == 1:
-            if self.inputs[0] is input_item:
-                return self.inputs[1] / self.output_quantity
+        if len(self.inputs) == 1:
+            if self.inputs[0][0].name == input_item:
+                return int(self.inputs[0][1]) / self.output_quantity
         else:
             for item, quantity in self.inputs:
-                if item is input_item:
-                    return quantity / self.output_quantity
+                if item.name == input_item:
+                    return int(quantity) / self.output_quantity
 
-    def get_input_item(self):
-        if self.num_inputs == 1:
-            yield self.inputs[0], self.inputs[1]
-            return StopIteration
-        else:
-            for _input, quantity in self.inputs:
-                yield _input, quantity
-            return StopIteration
-
-    @classmethod
-    def recipe_from_string(cls, string):
-        #https://regexr.com/5cj77
-        #https://regexr.com/5cjci
-        import re
-        s = string.decode('ascii')
-        time, output, inputs, name, next_item = None, [], [], None, None
-        wait = False
-        pattern = re.compile(r'''((order){1}.*)|
-                                    ((icon){1}.*)|
-                                    ((enabled){1}.*)|
-                                    ((allow_decomposition){1}.*)|
-                                    ((requester_paste_multiplier){1}.*)|
-                                    ((subgroup){1}.*)|
-                                    ((crafting_machine_tint){1}.*)|
-                                    ((primary){1}.*)|
-                                    ((secondary){1}.*)|
-                                    ((tertiary){1}.*)|
-                                    ((quaternary){1}.*)|
-                                    ((main_product){1}.*)''', re.VERBOSE)
-        st = pattern.sub('', s)
-        # print(st)
-        pattern = re.compile(r'[A-Za-z0-9-_]+')
-        word_list = ['name', 'energy_required', 'result_count', 'ingredients', 'result', 'expensive']
-        ingredients_list = ['name', 'type', 'amount']
-        for word in pattern.finditer(st):
-            data = str(word.group())
-            # print(f'{word.group()}, {word.start()}')
-            if next_item == 'expensive':
-                break
-
-            if next_item == 'name':
-                output.append(str(word.group()))
-                next_item = None
-                continue
-
-            if next_item == 'result_count':
-                output.append(str(word.group()))
-                next_item = None
-                continue
-
-            if next_item == 'energy_required':
-                time = str(word.group())
-                next_item = None
-                continue
-
-            if next_item == 'ingredients':
-                if str(word.group()) in word_list:
-                    if str(word.group()) in ingredients_list:
-                        next_item = 'ingredients'
-                        continue
-                    next_item = str(word.group())
-                else:
-                    inputs.append(str(word.group()))
-                    continue
-
-            if str(word.group()) in word_list:
-                next_item = str(word.group())
-            else:
-                next_item = None
-
-        print(f'{output}, from {inputs}, in {time}s')
+    # def get_input_item(self):
+    #     if len(self.inputs) == 1:
+    #         yield self.inputs[0][0], self.inputs[0][1]
+    #         return StopIteration
+    #     else:
+    #         for _input, quantity in self.inputs:
+    #             yield _input, quantity
+    #         return StopIteration
 
 
 class Item(object):
@@ -236,25 +239,17 @@ class Item(object):
     is_raw = False
     is_fluid = False
 
-    def __init__(self, name: str, machine_type_crafted_in=Assembly):
+    def __init__(self, name: str):
         self.name = name
-        self.crafted_in = machine_type_crafted_in
         self.recipes = []
         if self.name not in Item.items_dict.keys():
             Item.items_dict[self.name] = self
 
-        # if isinstance(self, Raw_Resource) or issubclass(type(self), Raw_Resource):
-        #     self.is_raw = True
-
-        if issubclass(type(self), Fluid_Handler):
+        if issubclass(type(self), Liquid):
             self.is_fluid = True
 
     def __repr__(self):
-        return "{}('{}', {})".format(type(self).__name__, self.name, self.crafted_in)
-
-    def add_possible_recipe(self, recipe):
-        self.recipes.append(recipe)
-        # print(f"{self}: {recipe.name}")
+        return f"{type(self).__name__}({self.name})"
 
     @property
     def has_multiple_recipes(self):
@@ -262,38 +257,60 @@ class Item(object):
 
     @staticmethod
     def get_item_from_string(s: str):
-        return Item.items_dict[s]
+        try:
+            return Item.items_dict[s]
+        except KeyError:
+            item = Item(s)
+            # item.recipes = [Recipe(1.0, [[item, 1]], [[item, 1]], item.name, 'drill')]
+            # item.is_raw = True
+            return item
 
     def get_recipe(self):
-        return self.recipes[0]
+        try:
+            return self.recipes[0]
+        except IndexError:
+            # base resource
+            self.is_raw = True
+            self.recipes.append(Recipe(1.0, [[self, 1]], [[self, 1]], self.name, 'drill'))
+            return self.recipes[0]
+
+    @staticmethod
+    def create_raw_resources():
+        for item in Item.items_dict.values():
+            if len(item.recipes) == 0:
+                item.is_raw = True
+                # either need to get the recipes from file
+                # or set a default one
+                item.recipes = [[Recipe(1.0, [[item, 1]], [[item, 1]], item.name, 'drill')]]
 
 
-class Raw_Resource(Item):
-    """
-    Any item that doesn't have an assembler.
-    Examples would be copper/iron ore, oil, water etc.
-    """
-    is_raw = True
 
-    def __init__(self, name, machine_type_crafted_in=Drill, importance=False):
-        self.name = name
-        self.crafted_in = machine_type_crafted_in
-        self.importance = importance
-        self.recipes = []
+# class Raw_Resource(Item):
+#     """
+#     Any item that doesn't have an assembler.
+#     Examples would be copper/iron ore, oil, water etc.
+#     """
+#     is_raw = True
+#
+#     def __init__(self, name, machine_type_crafted_in=Drill, importance=False):
+#         self.name = name
+#         self.crafted_in = machine_type_crafted_in
+#         self.importance = importance
+#         self.recipes = []
+#
+#         if issubclass(type(self), Liquid):
+#             self.is_fluid = True
 
-        if issubclass(type(self), Fluid_Handler):
-            self.is_fluid = True
 
-
-class Fluid_Item(Item, Fluid_Handler):
+class Fluid_Item(Item, Liquid):
     pass
 
 
-class Fluid_Raw_Resource(Raw_Resource, Fluid_Handler):
-    pass
+# class Fluid_Raw_Resource(Raw_Resource, Liquid):
+#     pass
 
 
-class Fluid_Recipe(Recipe, Fluid_Handler):
+class Fluid_Recipe(Recipe, Liquid):
     pass
 
 
@@ -323,7 +340,7 @@ class Multi_Craft(object):
             if recipe not in cls.recipe_list:
                 # print(f"recipe - {recipe}")
                 cls.recipe_list.append(recipe)
-                for _item, quantity in get_list_item_quantity(recipe.inputs):
+                for _item, quantity in recipe.inputs:
                     if _item not in cls.base_item_list:
                         cls.base_item_list.append(_item)
 
@@ -411,7 +428,7 @@ class Multi_Craft(object):
     """negative for inputs, positive for outputs"""
     @classmethod
     def create_column_from_recipe(cls, recipe, in_out_list, negative=True, val=None):
-        for item, quantity in get_list_item_quantity(in_out_list):
+        for item, quantity in in_out_list:
             if val is not None:
                 quantity = val
             cls.multi_matrix[cls.base_item_list.index(item), cls.recipe_list.index(recipe)] = pow(-1, negative) * quantity
@@ -447,203 +464,121 @@ def update_files():
     pickle_write("recipes", list(Recipe.recipes_list))
 
 
-# todo please remove me :)
-def init_test_data(file_overwrite=False):
+def init_data():
+    d = Data(Data.get_latest_version())
+    for ts in d.read_relevant_files():
+        for dl in d.data_extender(ts):
+            recipe_from_string(dl)
+    # Item.create_raw_resources()
 
-    m_mining_drill = Drill("mining_drill", 0.5, 3)
-    m_stone_furnace = Furnace("stone_furnace", 1, 0)
-    m_boiler = Fluid_Assembly("boiler", 1, 0)
-
-    coal = Raw_Resource("coal", Drill)
-    r_coal = Recipe(1, (coal, 1), (coal, 1))
-
-    copper_ore = Raw_Resource("copper_ore", Drill, importance=True)
-    r_copper_ore = Recipe(1, (copper_ore, 1), (copper_ore, 1))
-
-    copper_plate = Item("copper_plate", Furnace)
-    r_copper_plate = Recipe(3.2, (copper_plate, 1), (copper_ore, 1))
-
-    copper_cable = Item("copper_cable")
-    r_copper_cable = Recipe(0.5, (copper_cable, 2), (copper_plate, 1))
-
-    iron_ore = Raw_Resource("iron_ore", Drill, importance=True)
-    r_iron_ore = Recipe(1, (iron_ore, 1), (iron_ore, 1))
-
-    iron_plate = Item("iron_plate", Furnace)
-    r_iron_plate = Recipe(3.2, (iron_plate, 1), (iron_ore, 1))
-
-    pipe = Item("pipe")
-    r_pipe = Recipe(0.5, (pipe, 1), (iron_plate, 1))
-
-    steel_plate = Item("steel_plate", Furnace)
-    r_steel_plate = Recipe(16, (steel_plate, 1), (iron_plate, 5))
-
-    stone = Raw_Resource("stone", Drill)
-    r_stone = Recipe(1, (stone, 1), (stone, 1))
-
-    stone_brick = Item("stone_brick", Furnace)
-    r_stone_brick = Recipe(3.2, (stone_brick, 1), (stone, 2))
-
-    stone_wall = Item("stone_wall")
-    r_stone_wall = Recipe(0.5, (stone_wall, 1), (stone_brick, 5))
-
-    water = Fluid_Raw_Resource("water", Pump)
-    f_r_water = Fluid_Recipe(1, (water, 1200), (water, 1200))
-
-    steam = Fluid_Item("steam", Fluid_Assembly)
-    f_r_steam = Fluid_Recipe(1, (steam, 60), (water, 60))
-
-    crude_oil = Fluid_Raw_Resource("crude_oil", Pump, importance=True)
-    f_r_crude_oil = Fluid_Recipe(1, (crude_oil, 100), (crude_oil, 100))
-
-    heavy_oil = Fluid_Item("heavy_oil", Fluid_Assembly)
-    light_oil = Fluid_Item("light_oil", Fluid_Assembly)
-    petroleum_gas = Fluid_Item("petroleum_gas", Fluid_Assembly)
-    sulfuric_acid = Fluid_Item("sulfuric_acid", Fluid_Assembly)
-
-    basic_oil = Fluid_Recipe(5, (petroleum_gas, 45), (crude_oil, 100), "basic_oil_processing")
-
-    advanced_oil = Fluid_Recipe(5, ((heavy_oil, 25), (light_oil, 45), (petroleum_gas, 55)),
-                                ((crude_oil, 100), (water, 50)), "advanced_oil_processing")
-    coal_liquefaction = Fluid_Recipe(5, ((heavy_oil, 90), (light_oil, 20), (petroleum_gas, 10)),
-                                     ((coal, 10), (heavy_oil, 25), (steam, 50)), "coal_liquefaction")
-
-    heavy_cracking = Fluid_Recipe(2, (light_oil, 30), ((heavy_oil, 40), (water, 30)))
-    light_cracking = Fluid_Recipe(2, (petroleum_gas, 20), ((light_oil, 30), (water, 30)))
-
-    solid_fuel = Item("solid_fuel")
-    rocket_fuel = Item("rocket_fuel")
-    plastic_bar = Item("plastic_bar", Fluid_Assembly)
-    sulfur = Item("sulfur", Fluid_Assembly)
-
-    heavy_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (heavy_oil, 20), "heavy_oil_to_solid_fuel")
-    light_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (light_oil, 10), "light_oil_to_solid_fuel")
-    petroleum_to_solid = Fluid_Recipe(2, (solid_fuel, 1), (petroleum_gas, 20), "petroleum_gas_to_solid_fuel")
-
-    r_rocket_fuel = Fluid_Recipe(30, (rocket_fuel, 1), ((light_oil, 10), (solid_fuel, 10)))
-    f_r_plastic_bar = Fluid_Recipe(1, (plastic_bar, 2), ((coal, 1), (petroleum_gas, 20)))
-    f_r_sulfur = Fluid_Recipe(1, (sulfur, 2), ((petroleum_gas, 30), (water, 30)))
-
-    f_r_sulfuric_acid = Fluid_Recipe(1, (sulfuric_acid, 50), ((iron_plate, 1), (sulfur, 5), (water, 100)))
-
-    battery = Item("battery")
-    r_battery = Fluid_Recipe(4, (battery, 1), ((copper_plate, 1), (iron_plate, 1), (sulfuric_acid, 20)))
-
-    accumulator = Item("accumulator")
-    r_accumulator = Recipe(10, (accumulator, 1), ((battery, 5), (iron_plate, 2)))
-
-    iron_gear_wheel = Item("iron_gear_wheel")
-    r_iron_gear_wheel = Recipe(0.5, (iron_gear_wheel, 1), (iron_plate, 2))
-
-    electronic_circuit = Item("electronic_circuit")
-    r_electronic_circuit = Recipe(0.5, (electronic_circuit, 1), ((copper_cable, 3), (iron_plate, 1)))
-
-    automation_science_pack = Item("automation_science_pack")
-    r_automation_science_pack = Recipe(5, (automation_science_pack, 1), ((copper_plate, 1), (iron_gear_wheel, 1)))
-
-    transport_belt = Item("transport_belt")
-    r_transport_belt = Recipe(0.5, (transport_belt, 2), ((iron_gear_wheel, 1), (iron_plate, 1)))
-
-    inserter = Item("inserter")
-    r_inserter = Recipe(0.5, (inserter, 1), ((electronic_circuit, 1), (iron_gear_wheel, 1), (iron_plate, 1)))
-
-    logistic_science_pack = Item("logistic_science_pack")
-    r_logistic_science_pack = Recipe(6, (logistic_science_pack, 1), ((inserter, 1), (transport_belt, 1)))
-
-    grenade = Item("grenade")
-    r_grenade = Recipe(8, (grenade, 1), ((coal, 10), (iron_plate, 5)))
-
-    firearm_magazine = Item("firearm_magazine")
-    r_firearm_magazine = Recipe(1, (firearm_magazine, 1), (iron_plate, 4))
-
-    piercing_rounds_magazine = Item("piercing_rounds_magazine")
-    r_piercing_rounds_magazine = Recipe(3, (piercing_rounds_magazine, 1), ((copper_plate, 5),
-                                                                           (firearm_magazine, 1), (steel_plate, 1)))
-
-    military_science_pack = Item("military_science_pack")
-    r_military_science_pack = Recipe(10, (military_science_pack, 2), ((grenade, 1), (piercing_rounds_magazine, 1),
-                                                                      (stone_wall, 2)))
-
-    engine_unit = Item("engine_unit")
-    r_engine_unit = Recipe(10, (engine_unit, 1), ((iron_gear_wheel, 1), (pipe, 2), (steel_plate, 1)))
-
-    advanced_circuit = Item("advanced_circuit")
-    r_advanced_circuit = Recipe(6, (advanced_circuit, 1), ((copper_cable, 4), (electronic_circuit, 2),
-                                                           (plastic_bar, 2)))
-
-    chemical_science_pack = Item("chemical_science_pack")
-    r_chemical_science_pack = Recipe(24, (chemical_science_pack, 2), ((advanced_circuit, 3), (engine_unit, 2),
-                                                                      (sulfur, 1)))
-
-    iron_stick = Item("iron_stick")
-    r_iron_stick = Recipe(0.5, (iron_stick, 2), (iron_plate, 1))
-
-    rail = Item("rail")
-    r_rail = Recipe(0.5, (rail, 2), ((iron_stick, 1), (steel_plate, 1), (stone, 1)))
-
-    productivity_module = Item("productivity_module")
-    r_productivity_module = Recipe(15, (productivity_module, 1), ((advanced_circuit, 5), (electronic_circuit, 5)))
-
-    m_electric_furnace = Furnace("electric_furnace", 2, 2)
-    electric_furnace = Item("electric_furnace")
-    r_electric_furnace = Recipe(5, (electric_furnace, 1), ((advanced_circuit, 5), (steel_plate, 10), (stone_brick, 10)))
-
-    production_science_pack = Item("production_science_pack")
-    r_production_science_pack = Recipe(21, (production_science_pack, 3), ((electric_furnace, 1),
-                                                                          (productivity_module, 1), (rail, 30)))
-
-    radar = Item("radar")
-    r_radar = Recipe(0.5, (radar, 1), ((electronic_circuit, 5), (iron_gear_wheel, 5), (iron_plate, 10)))
-
-    solar_panel = Item("solar_panel")
-    r_solar_panel = Recipe(10, (solar_panel, 1), ((copper_plate, 5), (electronic_circuit, 15), (steel_plate, 5)))
-
-    speed_module = Item("speed_module")
-    r_speed_module = Recipe(15, (speed_module, 1), ((advanced_circuit, 5), (electronic_circuit, 5)))
-
-    processing_unit = Item("processing_unit")
-    r_processing_unit = Fluid_Recipe(10, (processing_unit, 1), ((advanced_circuit, 2), (electronic_circuit, 20),
-                                                                (sulfuric_acid, 5)))
-
-    rocket_control_unit = Item("rocket_control_unit")
-    r_rocket_control_unit = Recipe(30, (rocket_control_unit, 1), ((processing_unit, 1), (speed_module, 1)))
-
-    low_density_structure = Item("low_density_structure")
-    r_low_density_structure = Recipe(20, (low_density_structure, 1), ((copper_plate, 20), (plastic_bar, 5),
-                                     (steel_plate, 2)))
-
-    rocket_part = Item("rocket_part")
-    r_rocket_part = Recipe(3, (rocket_part, 1), ((low_density_structure, 10), (rocket_control_unit, 10),
-                                                 (rocket_fuel, 10)))
-
-    satellite = Item("satellite")
-    r_satellite = Recipe(5, (satellite, 1), ((accumulator, 100), (low_density_structure, 100), (processing_unit, 100),
-                                             (radar, 5), (rocket_fuel, 50), (solar_panel, 100)))
-
-    space_science_pack = Item("space_science_pack")
-    r_space_science_pack = Recipe(40.33, (space_science_pack, 1000), ((satellite, 1), (rocket_part, 100)))
-
-    if file_overwrite: update_files()
-
-
-def read_or_write_data(should_init=False):
-    init_test_data(should_init)  # will be replaced with something to handle non-reciped items and machines
-    if not should_init:
-        for fn in filenames:
-            pickle_read(fn)
+# def read_or_write_data(should_init=False):
+#     init_data()
+#     if not should_init:
+#         for fn in filenames:
+#             pickle_read(fn)
 
 
 def get_list_item_quantity(_list):
-    if not isinstance(_list[0], tuple):
-        yield _list[0], _list[1]
-        return StopIteration
-    else:
-        for item, quantity in _list:
-            yield item, quantity
-        return StopIteration
+    for item, quantity in _list:
+        yield Item.get_item_from_string(item), int(quantity)
+    return StopIteration
 
 
-def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False) -> dict:
+def recipe_from_string(string):
+        #https://regexr.com/5cj77
+        #https://regexr.com/5cjci
+        import re
+        s = string.decode('ascii')
+        time, output, inputs, name, category, next_item = 0.5, [], [], None, None, None
+        pattern = re.compile(r'''((order){1}.*)|
+                                    ((icon){1}.*)|
+                                    ((enabled){1}.*)|
+                                    ((allow_decomposition){1}.*)|
+                                    ((requester_paste_multiplier){1}.*)|
+                                    ((subgroup){1}.*)|
+                                    ((crafting_machine_tint){1}.*)|
+                                    ((primary){1}.*)|
+                                    ((secondary){1}.*)|
+                                    ((tertiary){1}.*)|
+                                    ((quaternary){1}.*)|
+                                    ((main_product){1}.*)''', re.VERBOSE)
+        st = pattern.sub('', s)
+        # print(st)
+        pattern = re.compile(r'[A-Za-z0-9-_.]+')
+        word_list = ['name', 'energy_required', 'result_count', 'ingredients',
+                     'expensive', 'result', 'results', 'category']
+        ingredients_list = ['name', 'type', 'amount']
+        for word in pattern.finditer(st):
+            # print(f'{word.group()}, {word.start()}')
+            if next_item == 'expensive':
+                # as far as ive seen, expensive is always the second listed recipe in the file
+                break
+
+            if next_item == 'category':
+                category = str(word.group())
+
+            if next_item == 'name':
+                output.append(str(word.group()))
+                next_item = None
+                continue
+
+            if next_item == 'results':
+                if str(word.group()) in word_list:
+                    if str(word.group()) in ingredients_list:
+                        next_item = 'results'
+                        continue
+                    next_item = str(word.group())
+                else:
+                    if not str(word.group()) in ingredients_list:
+                        output.append(str(word.group()))
+                    continue
+
+            if next_item == 'result_count':
+                output.append(str(word.group()))
+                next_item = None
+                continue
+
+            if next_item == 'energy_required':
+                time = str(word.group())
+                next_item = None
+                continue
+
+            if next_item == 'ingredients':
+                if str(word.group()) in word_list:
+                    if str(word.group()) in ingredients_list:
+                        next_item = 'ingredients'
+                        continue
+                    next_item = str(word.group())
+                else:
+                    if not str(word.group()) in ingredients_list:
+                        inputs.append(str(word.group()))
+                    continue
+
+            if str(word.group()) in word_list:
+                next_item = str(word.group())
+            else:
+                next_item = None
+
+        if category is None:
+            # anything that can be crafted by hand can be crafted by machine
+            category = 'crafting'
+
+
+        # print(f'{output}, from {inputs}, in category:{category}, {time}s')
+        name = output[0]
+        if len(output) == 1:
+            output.append('1')
+        if len(output) == 2:
+            output = Recipe.get_tuple_from_list(output)
+        else:
+            output = Recipe.get_tuple_from_list(output[1:])
+
+        inputs = Recipe.get_tuple_from_list(inputs)
+        Recipe(float(time), output, inputs, name, category)
+
+
+
+def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, is_first_item=False):
     """
     dictionary is edited in place
     """
@@ -653,10 +588,10 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
         number_to_be_crafted = recipe.output_quantity  # this breaks when there's more than 1 output
 
     if is_first_item:
-        for item, quantity in get_list_item_quantity(recipe.output):
+        for item, quantity in recipe.output:
             add_to_dict(total_dict, item, number_to_be_crafted)
-    for item, quantity in get_list_item_quantity(recipe.inputs):
-        modified_quantity = number_to_be_crafted * recipe.get_ratio(item)
+    for item, quantity in recipe.inputs:
+        modified_quantity = number_to_be_crafted * recipe.get_ratio(item.name)
         if not item.is_raw:
             if item.has_multiple_recipes:  # handles oil production and anything that has multiple recipes
                 Multi_Craft.add_to_class(item, modified_quantity)
@@ -669,19 +604,21 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
     return total_dict
 
 
+init_data()
+
 # read_or_write_data()
 #
 #
-# r = Recipe.get_recipe("production_science_pack")
-#
-# t_d = recipe_crawler(r, None, 1000, True)
-# # recipe_crawler(n, t_d, 3.0)
-#
+r = Recipe.get_recipe("production-science-pack")
+
+t_d = recipe_crawler(r, None, 1000, True)
+# recipe_crawler(n, t_d, 3.0)
+
 # Multi_Craft.build_matrix()
 # Multi_Craft.simplex()
-#
-# for item in t_d.items():
-#     print(item)
+
+for item in t_d.items():
+    print(item)
 
 
 # for item in Item.items_dict.values():
@@ -694,23 +631,4 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
 #    print(recipe)
 
 
-# p.init()
-#
-# display = p.display.set_mode((1024,768))
-# p.display.set_caption("Factorio Base Planner")
-#
 
-# crashed = False
-# while not crashed:
-
-#    for event in p.event.get():
-#        if event.type == p.QUIT:
-#            crashed = True
-
-# print(event)  # Can be used to get event triggers
-
-#    p.display.update()
-
-# p.quit()
-
-# quit()

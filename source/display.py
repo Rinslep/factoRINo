@@ -1,6 +1,6 @@
 from tkinter import *
 from random import randint, choice
-from math import fmod
+from math import fmod, dist, log10, sin, radians, degrees
 from pathlib import Path
 
 
@@ -22,8 +22,14 @@ class Node(object):
 
     def create_oval_node(self):
         self.oval_id = self.window.create_oval(self.tl, self.br, fill='red')
-        self.window.tag_bind(self.oval_id, '<Button-1>', lambda e: self.move(e))
-        self.window.tag_bind(self.oval_id, '<B1-Motion>', lambda e: self.move(e), add='+')
+        self.window.tag_bind(self.oval_id, '<Button-1>', lambda e: self.drag(e))
+        self.window.tag_bind(self.oval_id, '<B1-Motion>', lambda e: self.drag(e), add='+')
+        self.window.tag_bind(self.oval_id, '<Button-3>', lambda e: self.move(e), add='+')
+
+    def move_centre(self, x, y):
+        self.centre = self.coords_to_int(x, y, self.canvas_width)
+        self.window.coords(self.oval_id, *self.tl, *self.br)
+        self.move_connected_lines()
 
     @property
     def canvas_width(self):
@@ -53,6 +59,17 @@ class Node(object):
         self.connections[node] = line
 
     def move(self, e):
+        if any(self.connections):
+            for node, line in self.connections.items():
+                # print(f'n: {node}, L: {line}')
+                d = line.length
+                m = (self.radius * node.radius) / (d ** 2)
+                a = log10(m * d)
+                x1, y1, x2, y2 = line.dist_along(a)
+                self.move_centre(x1, y1)
+                node.move_centre(x2, y2)
+
+    def drag(self, e):
         self.lastx, self.lasty = self.tl
         self.centre = (e.y * self.canvas_width) + e.x
         self.window.move(self.oval_id, self.tl[0] - self.lastx, self.tl[1] - self.lasty)
@@ -66,6 +83,10 @@ class Node(object):
 
     def raise_node(self):
         self.window.tag_raise(self.oval_id)
+
+    @classmethod
+    def coords_to_int(cls, x, y, width):
+        return int((y * width) + x)
 
     @classmethod
     def is_connected(cls, a, b):
@@ -94,6 +115,34 @@ class Line(object):
     def b_centre(self):
         return self.b.centre_coords
 
+    @property
+    def length(self):
+        # could also minus both radius
+        return dist(self.a_centre, self.b_centre)
+
+    @property
+    def line_slope(self):
+        x1, y1 = self.a_centre
+        x2, y2 = self.b_centre
+        rise = y2 - y1
+        run = x2 - x1
+        return rise/run
+
+    @property
+    def canvas_width(self):
+        return int(self.window.cget('width'))
+
+    def get_direction(self):
+        # a->b is opposite direction of b->a
+        # down right is [True, True], up left is [False, False]
+        return self.a_centre[0] > self.b_centre[0], self.a_centre[1] > self.b_centre[1]
+
+    def dist_along(self, multiplier):
+        d = (self.length * multiplier) / 2
+        m = self.line_slope()
+        c = self.a_centre[1] - (m * self.a_centre[0])
+
+
     def move(self):
         self.window.coords(self.id, *self.a_centre, *self.b_centre)
 
@@ -115,17 +164,19 @@ WIDTH = int(HEIGHT * (16 / 9))
 canvas = Canvas(root, height=HEIGHT, width=WIDTH, bg='#AAAAAA')
 canvas.pack(padx=50, pady=50, ipadx=10, ipady=10, side=LEFT)
 # create nodes
-for i in range(100):
+for i in range(30):
     c = randint(0, (WIDTH * HEIGHT))
-    r = 10
+    r = randint(10, 24)
     Node(canvas, c, r)
 
 # create lines
-for i in range(150):
+for i in range(15):
     while True:
         try:
             node_a = choice(list(Node.nodes))
             node_b = choice(list(Node.nodes))
+            while node_a is node_b:
+                node_b = choice(list(Node.nodes))
             Node.is_connected(node_a, node_b)
             break
         except LineExistsError:
@@ -135,6 +186,9 @@ for i in range(150):
 
 for node in Node.nodes:
     node.raise_node()
+
+for line in Line.lines:
+    print(f'a:{line.a_centre},{line.a.centre}:{Node.coords_to_int(*line.a_centre, line.canvas_width)}, b:{line.b_centre} = {line.length}')
 
 while __name__ == '__main__':
     root.mainloop()
