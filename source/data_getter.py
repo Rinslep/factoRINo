@@ -8,7 +8,7 @@ from urllib3.exceptions import MaxRetryError
 class Data(object):
     data_folder_path = Path().absolute().parent / 'data'
     latest_version = '0.5.0'
-    suffixes = ['demo-recipe', 'capsule', 'circuit-network', 'demo-furnace-recipe', 'demo-recipe',
+    suffixes = ['capsule', 'circuit-network', 'demo-furnace-recipe', 'demo-recipe',
                 'demo-turret', 'equipment', 'fluid-recipe', 'inserter', 'module', 'recipe', 'turret']
 
     def __init__(self, version_number='0.5.0', file_type='.zip'):

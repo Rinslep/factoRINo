@@ -31,7 +31,7 @@ import numpy as np
 filenames = ["recipes", "machines", "items"]
 
 
-def add_to_dict(dict_to_add_to, item, quantity: float):
+def add_to_dict(dict_to_add_to, item, quantity):
     if item not in dict_to_add_to.keys():
         dict_to_add_to[item] = quantity
     else:
@@ -97,7 +97,8 @@ class Recipe(object):
                   'chemistry': Fluid_Assembly,
                   'centrifuging': Assembly,
                   'oil-processing': Fluid_Assembly,
-                  'drill': Drill}
+                  'smelting' : Furnace,
+                  'drill': Drill,}
 
     # list_function = {1: l_f(li), 2:l_f(li), 3:l_f(li)} # one item, at least 2 items, items with probability
 
@@ -110,32 +111,23 @@ class Recipe(object):
         self.name = name
 
 
-        #     try:
-        #         p = o[2]
-        #     except IndexError:
-        #         p = 1
-        #     try:
-        #         item = Item.get_item_from_string(o[0])
-        #     except KeyError:
-        #         item = Item(o[0])
-        #
-        #     self.inputs[idx][1] = int(o[1])
-        #
-        # for idx, o in enumerate(output):
-        #     try:
-        #         p = o[2]
-        #     except IndexError:
-        #         p = 1
+        for idx, o in enumerate(output):
+            try:
+                p = o[2]
+            except IndexError:
+                p = 1
+
+            item = Item.get_item_from_string(o[0])
+            if not self.is_raw:
+                item.append_recipe(self)
+
+            self.output[idx][0] = item
+            self.output[idx][1] = int(o[1])
+
         for idx, i in enumerate(self.inputs):
             item = Item.get_item_from_string(i[0])
             self.inputs[idx][0] = item
             self.inputs[idx][1] = int(i[1])
-
-        for idx, o in enumerate(self.output):
-            item = Item.get_item_from_string(o[0])
-            item.recipes.append(self)
-
-            self.output[idx][1] = int(o[1])
 
         if self not in Recipe.recipes_list:
             Recipe.recipes_list.append(self)
@@ -146,27 +138,19 @@ class Recipe(object):
     @property
     def output_quantity(self):
         # todo ensure this takes into account probability
+        # try:
+        #     prob = self.output[0][2]
+        #     return self.output[0][1] * prob
         return self.output[0][1]
 
-    # @property
-    # def num_inputs(self):
-    #     if not isinstance(self.inputs[0], tuple):
-    #         return 1
-    #     else:
-    #         return len(self.inputs)
-    #
-    # @property
-    # def num_outputs(self):
-    #     if not isinstance(self.output[0], tuple):
-    #         return 1
-    #     else:
-    #         return len(self.output)
+    @property
+    def is_raw(self):
+        return self.inputs == self.output
 
     @staticmethod
     def get_tuple_from_list(li):
         items = []
         count = 0
-
         for idx, val in enumerate(li):
             # the order here is important
             if val == 'probability':
@@ -224,6 +208,8 @@ class Recipe(object):
                 if item.name == input_item:
                     return int(quantity) / self.output_quantity
 
+
+
     # def get_input_item(self):
     #     if len(self.inputs) == 1:
     #         yield self.inputs[0][0], self.inputs[0][1]
@@ -236,12 +222,12 @@ class Recipe(object):
 
 class Item(object):
     items_dict = {}
-    is_raw = False
     is_fluid = False
 
     def __init__(self, name: str):
         self.name = name
         self.recipes = []
+        self.is_raw = False
         if self.name not in Item.items_dict.keys():
             Item.items_dict[self.name] = self
 
@@ -257,12 +243,12 @@ class Item(object):
 
     @staticmethod
     def get_item_from_string(s: str):
+        # if type(s) is Item:
+        #     return s
         try:
             return Item.items_dict[s]
         except KeyError:
             item = Item(s)
-            # item.recipes = [Recipe(1.0, [[item, 1]], [[item, 1]], item.name, 'drill')]
-            # item.is_raw = True
             return item
 
     def get_recipe(self):
@@ -270,20 +256,21 @@ class Item(object):
             return self.recipes[0]
         except IndexError:
             # base resource
-            self.is_raw = True
-            self.recipes.append(Recipe(1.0, [[self, 1]], [[self, 1]], self.name, 'drill'))
+            self.raw(True)
+            self.append_recipe(Recipe(1.0, [[self, 1]], [[self, 1]], self.name, 'drill'))
             return self.recipes[0]
 
-    @staticmethod
-    def create_raw_resources():
-        for item in Item.items_dict.values():
-            if len(item.recipes) == 0:
-                item.is_raw = True
-                # either need to get the recipes from file
-                # or set a default one
-                item.recipes = [[Recipe(1.0, [[item, 1]], [[item, 1]], item.name, 'drill')]]
+    def raw(self, bool):
+        self.is_raw = bool
 
-
+    def append_recipe(self, recipe):
+        if recipe in self.recipes:
+            pass
+        else:
+            if self.is_raw:
+                self.recipes = [recipe]
+            else:
+                self.recipes.append(recipe)
 
 # class Raw_Resource(Item):
 #     """
@@ -478,10 +465,10 @@ def init_data():
 #             pickle_read(fn)
 
 
-def get_list_item_quantity(_list):
-    for item, quantity in _list:
-        yield Item.get_item_from_string(item), int(quantity)
-    return StopIteration
+# def get_list_item_quantity(_list):
+#     for item, quantity in _list:
+#         yield Item.get_item_from_string(item), int(quantity)
+#     return StopIteration
 
 
 def recipe_from_string(string):
@@ -597,10 +584,14 @@ def recipe_crawler(recipe: Recipe, total_dict=None, number_to_be_crafted=None, i
                 Multi_Craft.add_to_class(item, modified_quantity)
             else:
                 add_to_dict(total_dict, item, modified_quantity)
-                recipe_crawler(Recipe.get_recipe(item), total_dict, modified_quantity)
+                r = Recipe.get_recipe(item)
+                if not r.is_raw:
+                    recipe_crawler(r, total_dict, modified_quantity)
         else:  # should handle raw resources like coal and ores
             if not is_first_item: # handles the case where the only item in the recipe chain is raw
+                # disabled because it doubles the output of raw resources
                 add_to_dict(total_dict, item, modified_quantity)
+                pass
     return total_dict
 
 
