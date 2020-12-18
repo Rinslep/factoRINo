@@ -19,7 +19,7 @@ class Data(object):
         except MaxRetryError:
             # when no connection
             # todo have a function to get the latest version in data folder
-            Data.latest_version = '1.0.0'
+            Data.latest_version = '1.1.0'
         # Data.download_file(Data.latest_version)
 
     # todo version changer, maybe have a dropdown box
@@ -67,7 +67,6 @@ class Data(object):
             except FileNotFoundError as e:
                 raise e
 
-    # todo recipe data parser - parse data from lua into base classes, maybe have classes handle it themselves
     @staticmethod
     def data_extender(text_stream):
         check_text =b'data:extend(\n{', b'data:extend\n{'
@@ -102,15 +101,15 @@ class Data(object):
     # https://stackoverflow.com/questions/645312/what-is-the-quickest-way-to-http-get-in-python/54856660#54856660
     @staticmethod
     def get_latest_version():
-        try:
-            http = PoolManager()
-            r = http.request('GET', 'https://raw.githubusercontent.com/wube/factorio-data/master/base/info.json')
-            line = r.data.decode('utf-8').split('  "version": "')[1]
-            current_version = line.split('"')[0]
-            return current_version
-        except MaxRetryError:
-            # todo handle this error by searching files to get latest version
-            return '1.0.0'
+        # try:
+        #     http = PoolManager()
+        #     r = http.request('GET', 'https://raw.githubusercontent.com/wube/factorio-data/master/base/info.json')
+        #     line = r.data.decode('utf-8').split('  "version": "')[1]
+        #     current_version = line.split('"')[0]
+        #     return current_version
+        # except MaxRetryError:
+        # todo handle this error by searching files to get latest version
+        return '1.1.0'
 
     @staticmethod
     def get_all_versions():
